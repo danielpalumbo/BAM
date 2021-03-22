@@ -1,11 +1,12 @@
 from setuptools import setup
 
-setup(name='example',
+setup(name='dmc3d',
       version='1.0',
-      description='An example package for Harvard PHYS201',
-      url='http://github.com/phys201/example',
-      author='ralex0',
-      author_email='ralex0@users.noreply.github.com',
+      description='Model fitting around black holes.',
+      url='http://github.com/danielpalumbo/3DMC/',
+      author='danielpalumbo',
+      author_email='daniel.palumbo@cfa.harvard.edu',
       license='GPLv3',
-      packages=['example'],
-      install_requires=['numpy'])
+      packages=['dmc3d',
+                'dmc3d.inference'],
+      install_requires=['numpy','scipy','theano','pymc3','matplotlib','ehtim'])

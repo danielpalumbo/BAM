@@ -31,7 +31,7 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0,  nmax=0, beta=0, chi=0,thetabz=np.pi/2, spec=1, f=0, e=0, calctype='approx')
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0,  nmax=0, beta=0, chi=0, thetabz=np.pi/2, spec=1, f=0, e=0, calctype='approx'):
 
         self.MAP_estimate = None
         # self.MAP_values = None

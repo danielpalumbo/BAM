@@ -1,12 +1,12 @@
 from setuptools import setup
 
-setup(name='dmc3d',
+setup(name='bam',
       version='1.0',
-      description='Model fitting around black holes.',
-      url='http://github.com/danielpalumbo/3DMC/',
+      description='Model fitting accretion flows around black holes.',
+      url='http://github.com/danielpalumbo/BAM/',
       author='danielpalumbo',
       author_email='daniel.palumbo@cfa.harvard.edu',
       license='GPLv3',
-      packages=['dmc3d',
-                'dmc3d.inference'],
+      packages=['bam',
+                'bam.inference'],
       install_requires=['numpy','scipy','theano','pymc3','matplotlib','ehtim'])

@@ -7,32 +7,45 @@ import theano
 import random
 import theano.tensor as tt
 import pickle as pkl
-from dmc3d.inference.model_helpers import emission_coordinates, Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable
+from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable
 import eht_dmc as dmc
-from dmc3d.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
-from dmc3d.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
+# from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
+# from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # theano.config.exception_verbosity='high'
 theano.config.compute_test_value = 'ignore'
 
-class Blimage:
-    '''The Blimage class is a collection of blixels and black hole parameters.
+def example_fixed_jfunc(r, phi, jargs):
+    peak_r = jargs[0]
+    thickness = jargs[1]
+    return np.exp(-4*np.log(2)*((r-peak_R)/thickness)**2)
+
+def example_model_jfunc(r, phi, jargs):
+    peak_r = jargs[0]
+    thickness = jargs[1]
+    return pm.math.exp(-4*np.log(2)*((r-peak_R)/thickness)**2)
+
+
+class Bam:
+    '''The Bam class is a collection of accretion flow and black hole parameters.
+    jfunc: a callable that takes (r, phi, jargs)
+    if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, r_lims, phi_lims, nr, nphi, M, D, inc, j, zbl, PA=0,  nmax=0, beta=0, chi=0, spec=1, f=0, e=0, calctype='approx'):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0,  nmax=0, beta=0, chi=0,thetabz=np.pi/2, spec=1, f=0, e=0, calctype='approx')
+
         self.MAP_estimate = None
         # self.MAP_values = None
+        self.jfunc = jfunc
+        self.jarg_names = jarg_names
+        self.jargs = jargs
         self.trace = None
-        self.r_lims = r_lims
-        self.phi_lims = phi_lims
-        self.nr = nr
-        self.nphi = nphi
         self.M = M
         self.D = D
         self.inc = inc
-        self.j = j
         self.PA = PA
         self.beta = beta
         self.chi=chi
+        self.thetabz=thetabz
         self.spec=spec
         self.f = f
         self.e = e
@@ -40,36 +53,31 @@ class Blimage:
         self.zbl = zbl
         self.calctype = calctype
         self.rho_c = np.sqrt(27)
-        self.nblix = nr*nphi
-        # r = np.sqrt(np.linspace(r_lims[0]**2, r_lims[1]**2, nr+1)[:-1])
-        r = np.linspace(r_lims[0],r_lims[1],nr)
-        phi = np.linspace(phi_lims[0],phi_lims[1], nphi+1)[:-1]
-        self.r = r
-        self.phi = phi
-        r_grid, phi_grid = np.meshgrid(r,phi)
-        self.rvec = r_grid.flatten()
-        self.phivec = phi_grid.flatten()
+
+        pxi = (np.arange(npix)-0.01)/npix-0.5
+        pxj = np.arange(npix)/npix-0.5
+        # get angles measured East of North
+        PXI,PXJ = np.meshgrid(pxi,pxj)
+        varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
+        self.varphivec = varphi.flatten()
+
+        #get grid of angular radii
+        mui = pxi*fov
+        muj = pxj*fov
+        MUI,MUJ = np.meshgrid(mui,muj)
+        MUDISTS = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
 
 
-        self.xvec = self.rvec*np.cos(self.phivec)
-        self.yvec = self.rvec*np.sin(self.phivec)
-        
-        if any([isiterable(i) for i in [M, D, inc, j, zbl, PA, f, beta, chi]]):
+        if any([isiterable(i) for i in [M, D, inc, zbl, PA, f, beta, chi, thetabz, e, spec]+jargs]):
             mode = 'model'
         else:
             mode = 'fixed' 
         self.mode = mode
-        # self.x = r*np.cos(phi)
-        # self.y = r*np.sin(phi)
 
-
-        self.highnalpha = np.arcsin(np.sqrt(1-2/self.rvec)*np.sqrt(27)/self.rvec)
-
-        # self.blixels = list()
-
-        # self.modeled_priors = list()
 
         if self.mode == 'model':
+            sign = pm.math.sgn
+            clip = pm.math.clip
             cos = pm.math.cos
             sin = pm.math.sin
             arccos = tt.basic.arccos
@@ -77,6 +85,7 @@ class Blimage:
             arctan2 = tt.basic.arctan2
             sqrt = pm.math.sqrt
             exp = pm.math.exp
+            log = pm.math.log
             model = pm.Model()
             with model:
                 #build priors
@@ -130,6 +139,11 @@ class Blimage:
                 else:
                     chi_prior = chi
 
+                if isiterable(thetabz):
+                    thetabz_prior = pm.Uniform('thetabz',lower=theatbz[0],upper=thetabz[1])
+                else:
+                    thetabz_prior = thetabz
+
                 if isiterable(spec):
                     spec_prior=pm.Uniform('spec',lower=spec[0],upper=spec[1])#, testval = np.mean([spec[0],spec[1]]))
                     # self.modeled_priors.append(spec_prior)
@@ -153,17 +167,14 @@ class Blimage:
                     if calctype == 'exact' and isiterable(e):
                         print("Can't fit e in exact mode; using e = 0")
                         e_prior = 0
-
-                if isiterable(j):
-                    self.blixels = pm.Uniform('blixels',lower=j[0],upper=j[1],shape=self.nblix)#,testval = np.mean([j[1],j[0]]))
-                    # blixels = pm.Dirichlet('blixels', a=a, shape=self.npix)
-                    # self.blixels=blixels
-                    # self.modeled_priors.append(self.blixels)
-                else:
-                    if callable(j):
-                        self.blixels = j(self.rvec, self.phivec)
+                jarg_priors = []
+                for jargi in len(jargs):
+                    jarg = jargs[jargi]
+                    if isiterable(jarg):
+                        jarg_priors.append(pm.Uniform(jargnames[jargi],lower=jarg[0],upper=jarg[1]))
                     else:
-                        self.blixels = j*np.ones_like(self.rvec)
+                        jarg_priors.append(jarg)
+               
             self.M_prior = M_prior
             self.D_prior = D_prior
             self.inc_prior=inc_prior
@@ -171,20 +182,25 @@ class Blimage:
             self.PA_prior = PA_prior
             self.beta_prior=beta_prior
             self.chi_prior = chi_prior
+            self.thetabz_prior = thetabz_prior
             self.spec_prior = spec_prior
             self.f_prior = f_prior
             self.e_prior = e_prior
+            self.jarg_priors = jarg_priors
 
 
             self.model=model
         else:
+            sign = np.sign
+            clip = np.clip
             cos = np.cos
             sin = np.sin
             arccos = np.arccos
             arcsin = np.arcsin
             arctan2 = np.arctan2
             sqrt = np.sqrt
-            exp  = np .exp
+            exp  = np.exp
+            log  = np.log
             M_prior = M
             D_prior = D
             inc_prior = inc
@@ -195,10 +211,6 @@ class Blimage:
             spec_prior = spec
             f_prior = f
             e_prior = e
-            if callable(j):
-                self.blixels=j(self.rvec, self.phivec)
-            else:
-                self.blixels = j*np.ones_like(self.rvec)
 
         self.sys_err = f_prior
         self.abs_err = e_prior
@@ -213,177 +225,151 @@ class Blimage:
             #     rho2 = (((r/D)**2.0)*(1.0 - ((sin(theta0)**2.0)*(sin(phi)**2.0)))) + ((2.0*r*r_g/(D**2.0))*((1.0 + (sin(theta0)*sin(phi)))**2.0))
             #     rho = sqrt(rho2)
             #     return rho
-            def rho_conv(r, phi, theta0):
-                rho2 = (r**2.0)*(1.0 - ((sin(theta0)**2.0)*(sin(phi)**2.0))) + (2.0*r)*((1.0 + (sin(theta0)*sin(phi)))**2.0)
-                rho = sqrt(rho2)
-                return rho
 
-            def varphi_conv(phi, theta0):
-                return arctan2(np.sin(phi)*cos(theta0),cos(phi))
-
-            self.cospsi0 = -sin(inc_prior)*np.sin(self.phivec)
-            self.cosalpha0 = self.cospsi0 + 2/self.rvec *(1-self.cospsi0)
-
-            # self.cosalpha0prime = -self.cosalpha0
-            # self.cospsi0prime = - (self.cosalpha0+2/self.rvec)/(1-2/self.rvec)
-
-            self.psi0 = arccos(self.cospsi0)
-            self.psi1 = -(2*np.pi-self.psi0)
-
-            self.alpha0 = arccos(self.cosalpha0)
+            def emission_coordinates(rho, varphi):
+                phi = arctan2(sin(varphi),cos(varphi)*cos(inc_rad))
+                sinprod = sin(inc_rad)*sin(phi)
+                numerator = 1+rho**2 - (-3+rho**2)*sinprod+3*sinprod**2 + sinprod**3 
+                denomenator = (-1+sinprod)**2 * (1+sinprod)
+                sqq = sqrt(numerator/denomenator)
+                r = (1-sqq + sinprod*(1+sqq))/(sinprod-1)
+                return r, phi
 
 
-            #build list of alphas
-            self.alphas = []
-            # self.alphaprimes = []
-            for n in range(nmax+1):
-                if n == 0:
-                    self.alphas.append(self.alpha0)
-                    # self.alphaprimes.append(np.pi-self.alpha0)
-                else:
-                    alpha = np.arcsin((-1)**n * np.sqrt(1-2/self.rvec) * np.sqrt(27)/self.rvec)
-                    alpha[self.rvec > 3] =  (-1)**n * (np.pi - (-1)**n * alpha[self.rvec>3])
-                    self.alphas.append(alpha)
-                    # self.alphaprimes.append(np.pi-alpha)
+            #convert mudists to gravitational units
+            rho = self.D_prior / (self.M_prior*Gpercsq) * MUDISTS
+            self.rhovec = rho.flatten()
 
-            #build list of all relevant psis
-            self.psis = []
-            # self.psiprimes = []
-            for n in range(nmax+1):
-                if n == 0:
-                    self.psis.append(self.psi0)
-                elif n == 1:
-                    self.psis.append(self.psi1)
-                else:
-                    self.psis.append(self.psis[n-2]+2*np.pi*(-1)**n)
-                # self.psiprimes.append((-1)**n * arccos(-(cos(self.alphas[n]) + 2./self.rvec)/(1.-2./self.rvec)))
+            rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
+            rvec = clip(rvec, 2.+1.e-9,np.inf)
+            #begin Ramesh formalism
+            eta = self.chi_prior+np.pi
+            beq = sin(self.thetabz_prior)
+            bz = cos(self.thetabz_prior)
+            br = beq*cos(eta)
+            bphi = beq*sin(eta)
+            bx = br
+            by = bphi
+
+            bmag = sqrt(bx**2 + by**2 + bz**2)
+            gfac = sqrt(1. - 2./r)
+            gfacinv = 1. / gfac
+            gamma = 1. / sqrt(1. - beta**2)
+
+            sintheta = sin(inc_prior)
+            costheta = cos(inc_prior)
+            sinphi = sin(phivec)
+            cosphi = cos(phivec)
+
+            cospsi = -sintheta * sinphi
+            sinpsi = sqrt(1. - cospsi**2)
+
+            cosalpha = 1. - (1. - cospsi) * (1. - 2./r)
+            sinalpha =sqrt(1. - cosalpha**2)
+
+            
+            sinxi = sintheta * cosphi / sinpsi
+            cosxi = costheta / sinpsi
+            
+            kPthat = gfacinv
+            kPxhat = cosalpha * gfacinv
+            kPyhat = -sinxi * sinalpha * gfacinv
+            kPzhat = cosxi * sinalpha * gfacinv
+            
+            kFthat = gamma * (kPthat - betax * kPxhat - betay * kPyhat)
+            kFxhat = -gamma * betax * kPthat + (1 + (gamma-1) * coschi**2) * kPxhat + (gamma-1) * coschi * sinchi * kPyhat
+            kFyhat = -gamma * betay * kPthat + (gamma-1) * sinchi * coschi * kPxhat + (1 + (gamma-1) * sinchi**2) * kPyhat
+            kFzhat = kPzhat
+
+
+            delta = 1. / kFthat
+            
+            kcrossbx = kFyhat * bz - kFzhat * by
+            kcrossby = kFzhat * bx - kFxhat * bz
+            kcrossbz = kFxhat * by - kFyhat * bx
+
+            # polfac = np.sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
+            sinzeta = sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
+
+            profile = self.jfunc(rvec, phivec, self.jarg_priors)
+            # 
+
+            polarizedintensity = sinzeta**(1+self.spec_prior) * delta**(3. + self.spec_prior) * profile
+            
+            # if INTENSITYISOTROPIC:
+            #     intensity = delta**(3. + SPECTRALINDEX)
+            # else:
+            #     intensity = polarizedintensity
+            
+            mag = polarizedintensity
                 
-            #finally, build winding angles
-            #if using partial winding angles
-            self.winding_angles = [self.psis[n]-self.alphas[n] for n in range(nmax+1)]
-            # self.winding_angles = [self.psis[n]+self.psiprimes[n]-np.pi*(-1)**n for n in range(nmax+1)]
-            self.deltawas = [sqrt(self.winding_angles[n]**2) - sqrt(self.winding_angles[0]**2) for n in range(nmax+1)]
+            pathlength = kFthat/kFzhat
+            if path:
+                mag *= pathlength
 
-
-
-            # self.rho_c = np.sqrt(27) * self.r_g / D_prior
+            fFthat = 0
+            fFxhat = kcrossbx / (kFthat * bmag)
+            fFyhat = kcrossby / (kFthat * bmag)
+            fFzhat = kcrossbz / (kFthat * bmag)
             
-            # self.rhovec = rho_conv(self.rvec*self.r_g, self.phivec, D_prior, inc_prior, self.r_g) 
-            self.rhovec = rho_conv(self.rvec, self.phivec, inc_prior) 
-            self.delta_rhovec = self.rhovec - self.rho_c
-            self.rhos = [self.rho_c+self.delta_rhovec*exp(-self.deltawas[n]) for n in range(nmax+1)]
-            self.gains = [sqrt(self.rhos[n]**2/self.rhos[0]**2)*exp(-self.deltawas[n]) for n in range(nmax+1)]
-
-
-
-
-
-            self.varphivec = varphi_conv(self.phivec, inc_prior)
-            # self.varphivec = varphi_conv(self.phivec, inc_prior, mode)
-            # self.imxvec = self.rhovec*pm.math.cos(self.varphivec)
-            # self.imyvec = self.rhovec*pm.math.sin(self.varphivec)
-            pre_imxvec = self.rhovec*cos(self.varphivec)
-            pre_imyvec = self.rhovec*sin(self.varphivec)
-            self.imxvec = cos(PA_prior)*pre_imxvec - sin(PA_prior)*pre_imyvec
-            self.imyvec = sin(PA_prior)*pre_imxvec + cos(PA_prior)*pre_imyvec
-            # self.effective_rhovec = sqrt(self.imxvec**2 + self.imyvec**2)
-            # self.delta_rhovec = self.effective_rhovec-self.rho_c
-            # self.effective_varphivec = self.varphivec - PA_prior
-            pre_x_c = self.rho_c * cos(self.varphivec)
-            pre_y_c = self.rho_c * sin(self.varphivec)
-            self.x_c = cos(PA_prior)*pre_x_c - sin(PA_prior)*pre_y_c
-            self.y_c = sin(PA_prior)*pre_x_c + cos(PA_prior)*pre_y_c
-            # self.x_c = self.rho_c*pm.math.cos(self.effective_varphivec)
-            # self.y_c = self.rho_c*pm.math.sin(self.effective_varphivec)
-            self.delta_xvec = self.imxvec - self.x_c
-            self.delta_yvec = self.imyvec - self.y_c
-
-
-            #velocity and redshift effects from ring model paper
-            self.cosxis = [cos(inc_prior)/sin(self.psis[n]) for n in range(nmax+1)]
-            self.sinxis = [sin(inc_prior)*np.cos(self.phivec)/sin(self.psis[n]) for n in range(nmax+1)]
-            self.ktp = 1/(1-2/self.rvec)**(1/2)
-            self.kxps = [cos(self.alphas[n])/(1-2/self.rvec)**(1/2) for n in range(nmax+1)]
-            self.kyps = [-self.sinxis[n]*sin(self.alphas[n]/(1-2/self.rvec)**(1/2)) for n in range(nmax+1)]
-            self.kzps = [self.cosxis[n]*sin(self.alphas[n]/(1-2/self.rvec)**(1/2)) for n in range(nmax+1)]
-
-            self.betax = beta_prior * cos(chi_prior)
-            self.betay = beta_prior * sin(chi_prior)
-            self.gamma = 1/sqrt(1-beta_prior**2)
-
-            self.ktfs = [self.gamma*self.ktp - self.gamma*self.betax*self.kxps[n]-self.gamma*self.betay*self.kyps[n] for n  in range(nmax+1)] 
-            self.kxfs = [-self.gamma*self.betax*self.ktp +(1+(self.gamma-1)*cos(chi_prior)**2)*self.kxps[n] +(self.gamma-1)*cos(chi_prior)*sin(chi_prior)*self.kyps[n] for n in range(nmax+1)]
-            self.kyfs = [-self.gamma*self.betay*self.ktp +(1+(self.gamma-1)*sin(chi_prior)**2)*self.kyps[n] +(self.gamma-1)*cos(chi_prior)*sin(chi_prior)*self.kxps[n] for n in range(nmax+1)]
-            self.kzfs = [self.kzps[n] for n in range(nmax+1)]
-            self.dopplers = [1/self.ktfs[n] for n in range(nmax+1)]
-            self.boosts = [self.dopplers[n]**(3+spec_prior) for n in range(nmax+1)]
-            self.pathlengths = [np.ones_like(self.rvec) for n in range(nmax+1)]
+            # fPthat = gamma * (fFthat + beta * fFyhat)
+            # fPxhat = fFxhat
+            # fPyhat = gamma * (beta *fFthat + fFyhat)
+            # fPzhat = fFzhat
             
-            print("Finished building blimage in "+ self.mode +" mode with calctype " +self.calctype)  
+            fPthat = gamma * (fFthat + betax * fFxhat + betay * fFyhat)
+            fPxhat = gamma * betax * fFthat + (1 + (gamma-1) * coschi**2) * fFxhat + (gamma-1) * coschi * sinchi * fFyhat
+            fPyhat = gamma * betay * fFthat + (gamma-1) * sinchi * coschi * fFxhat + (1 + (gamma-1) * sinchi**2) * fFyhat
+            fPzhat = fFzhat
+
+            kPrhat = kPxhat
+            kPthhat = -kPzhat
+            kPphat = kPyhat
+            fPrhat = fPxhat
+            fPthhat = -fPzhat
+            fPphat = fPyhat
+               
+            k1 = r * (kPthat * fPrhat - kPrhat * fPthat)
+            k2 = -r * (kPphat * fPthhat - kPthhat * fPphat)
+                
+            kOlp = r * kPphat
+            radicand = kPthhat**2 - kPphat**2 * costheta**2 / sintheta**2
+            # due to machine precision, some small negative values are present. We clip these here.
+            # radicand[radicand<0] = 0
+            radical = sqrt(clip(radicand,0.,np.inf))
+            kOlth = r * radical * sign(sinphi)
+
+            xalpha = -kOlp / sintheta
+            ybeta = kOlth
+            nu = -xalpha
+            den = sqrt((k1**2 + k2**2) * (ybeta**2 + nu**2))
+
+            ealpha = (ybeta * k2 - nu * k1) / den
+            ebeta = (ybeta * k1 + nu * k2) / den
+
+            qvec = -mag*(ealpha**2 - ebeta**2)
+            uvec = -mag*(2*ealpha*ebeta)
+            ivec = sqrt(qvec**2 + uvec**2)
+            self.tf = pm.math.sum(ivec)
+            self.qvec = qvec * self.zbl_prior/self.tf
+            self.uvec = uvec * self.zbl_prior/self.tf
+            self.ivec = ivec * self.zbl_prior/self.tf
+            # im.qvec = q.flatten()
+            # im.uvec = u.flatten()
+            # im.ivec = np.sqrt(im.qvec**2+im.uvec**2)/m
+            # conversion = total_flux/im.total_flux()
+            # im.ivec *= conversion
+            # im.qvec *= conversion
+            # im.uvec *= conversion
+
+            # #rotate the final image
+            # im  = im.rotate(rotation_deg*np.pi/180)
+
+            # return im
+            
+            print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)  
         elif calctype == 'exact':
-            if mode == 'fixed':
-                print("Blimage is in fixed mode; precomputing exact image.")
-                self.rhos = []
-                self.varphis = []
-                for n in range(nmax+1):
-                    subrhos, subvarphis = getscreencoords(self.rvec, self.phivec, inc_prior,n)
-                    self.rhos.append(subrhos)
-                    self.varphis.append(subvarphis) 
-
-                self.winding_angles = [getwindangle(self.rhos[n], self.rvec, self.phivec, inc_prior, n) for n in range(nmax+1)]
-                self.psivecs = [getpsin(inc_prior, self.phivec, n) for n in range(nmax+1)]
-                self.alphavecs = [getalphan(self.rhos[n], self.rvec, inc_prior, self.psivecs[n]) for n in range(nmax+1)]
-
-                # subpsivec = getpsin(subrhovec, inc, phivec, n)
-                # subalphavec = getalphan(subrhovec, rvec, inc, subpsivec)
-
-
-                # pre_imxvec = self.rhos[0]*cos(self.varphis[0])
-                # pre_imyvec = self.rhos[0]*sin(self.varphis[0])
-                # self.imxvec = cos(PA_prior)*pre_imxvec - sin(PA_prior)*pre_imyvec
-                # self.imyvec = sin(PA_prior)*pre_imxvec + cos(PA_prior)*pre_imyvec
-                pre_imxvecs = [self.rhos[n]*cos(self.varphis[n]) for n in range(nmax+1)]
-                pre_imyvecs = [self.rhos[n]*sin(self.varphis[n]) for n in range(nmax+1)]
-                self.imxvecs = [cos(PA_prior)*pre_imxvecs[n]-sin(PA_prior)*pre_imyvecs[n] for n in range(nmax+1)]
-                self.imyvecs = [sin(PA_prior)*pre_imxvecs[n]+cos(PA_prior)*pre_imyvecs[n] for n in range(nmax+1)]
-                self.imxvec = self.imxvecs[0]
-                self.imyvec = self.imyvecs[0]
-
-# getwindangle(np.array([rho]), r, phi, theta0, 0)                
-
-                # self.winding_angles = [self.psis[n]+self.psiprimes[n]-np.pi*(-1)**n for n in range(nmax+1)]
-                self.deltawas = [sqrt(self.winding_angles[n]**2) - sqrt(self.winding_angles[0]**2) for n in range(nmax+1)]
-
-                # self.rhovec = rho_conv(self.rvec, self.phivec, inc_prior) 
-                # self.delta_rhovec = self.rhovec - self.rho_c
-                # self.rhos = [self.rho_c+self.delta_rhovec*np.exp(-self.deltawas[n]) for n in range(nmax+1)]
-                self.gains = [sqrt(self.rhos[n]**2/self.rhos[0]**2)*np.exp(-self.deltawas[n]) for n in range(nmax+1)]
-                self.cosxis = [cos(inc_prior)/sin(self.psivecs[n]) for n in range(nmax+1)]
-                self.sinxis = [sin(inc_prior )*cos(self.phivec)/sin(self.psivecs[n]) for n in range(nmax+1)]
-                self.ktp = 1/(1-2/self.rvec)**(1/2)
-                self.kxps = [np.cos(self.alphavecs[n])/(1-2/self.rvec)**(1/2) for n in range(nmax+1)]
-                self.kyps = [-self.sinxis[n]*np.sin(self.alphavecs[n]/(1-2/self.rvec)**(1/2)) for n in range(nmax+1)]
-                self.kzps = [self.cosxis[n]*np.sin(self.alphavecs[n]/(1-2/self.rvec)**(1/2)) for n in range(nmax+1)]
-
-                self.betax = beta * np.cos(chi)
-                self.betay = beta * np.sin(chi)
-                self.gamma = 1/np.sqrt(1-beta**2)
-
-                self.ktfs = [self.gamma*self.ktp - self.gamma*self.betax*self.kxps[n]-self.gamma*self.betay*self.kyps[n] for n  in range(nmax+1)] 
-                self.kxfs = [-self.gamma*self.betax*self.ktp +(1+(self.gamma-1)*np.cos(chi_prior)**2)*self.kxps[n] +(self.gamma-1)*np.cos(chi_prior)*np.sin(chi_prior)*self.kyps[n] for n in range(nmax+1)]
-                self.kyfs = [-self.gamma*self.betay*self.ktp +(1+(self.gamma-1)*np.sin(chi_prior)**2)*self.kyps[n] +(self.gamma-1)*np.cos(chi_prior)*np.sin(chi_prior)*self.kxps[n] for n in range(nmax+1)]
-                self.kzfs = [self.kzps[n] for n in range(nmax+1)]
-                self.dopplers = [1/self.ktfs[n] for n in range(nmax+1)]
-                self.boosts = [self.dopplers[n]**(3+spec_prior) for n in range(nmax+1)]
-                self.pathlengths = [np.sqrt((self.ktfs[n]/self.kzfs[n])**2) for n in range(nmax+1)]
-
-                # self.varphivec = varphi_conv(self.phivec, inc_prior)
-
-
-            else:
-                print("Blimage has calctype exact; delaying computation until likelihood construction.")
-                with model:
-                    self.theta = tt.as_tensor_variable(tt.concatenate([[M_prior], [D_prior], [inc_prior], [zbl_prior], [PA_prior], [beta_prior], [chi_prior], [spec_prior],self.blixels]))
+            pass
 
     def unscaled_vis(self,u,v):
         if self.mode == 'model':

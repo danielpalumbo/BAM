@@ -17,7 +17,7 @@ theano.config.compute_test_value = 'ignore'
 def example_fixed_jfunc(r, phi, jargs):
     peak_r = jargs[0]
     thickness = jargs[1]
-    return np.exp(-4*np.log(2)*((r-peak_R)/thickness)**2)
+    return np.exp(-4*np.log(2)*((r-peak_r)/thickness)**2)
 
 def example_model_jfunc(r, phi, jargs):
     peak_r = jargs[0]
@@ -33,6 +33,8 @@ class Bam:
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
     def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0,  nmax=0, beta=0, chi=0, thetabz=np.pi/2, spec=1, f=0, e=0, calctype='approx'):
 
+        self.fov = fov
+        self.npix = npix
         self.MAP_estimate = None
         # self.MAP_values = None
         self.jfunc = jfunc
@@ -56,18 +58,22 @@ class Bam:
 
         pxi = (np.arange(npix)-0.01)/npix-0.5
         pxj = np.arange(npix)/npix-0.5
-        # get angles measured East of North
+        # get angles measured north of west
         PXI,PXJ = np.meshgrid(pxi,pxj)
         varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
         self.varphivec = varphi.flatten()
-
+        
         #get grid of angular radii
         mui = pxi*fov
         muj = pxj*fov
         MUI,MUJ = np.meshgrid(mui,muj)
         MUDISTS = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
+        self.MUDISTS = MUDISTS.flatten()
 
-
+        #while we're at it, get x and y
+        self.imxvec = -self.MUDISTS*np.cos(self.varphivec)
+       
+        self.imyvec = self.MUDISTS*np.sin(self.varphivec)
         if any([isiterable(i) for i in [M, D, inc, zbl, PA, f, beta, chi, thetabz, e, spec]+jargs]):
             mode = 'model'
         else:
@@ -76,6 +82,7 @@ class Bam:
 
 
         if self.mode == 'model':
+            summate = pm.math.sum
             sign = pm.math.sgn
             clip = pm.math.clip
             cos = pm.math.cos
@@ -168,7 +175,7 @@ class Bam:
                         print("Can't fit e in exact mode; using e = 0")
                         e_prior = 0
                 jarg_priors = []
-                for jargi in len(jargs):
+                for jargi in range(len(jargs)):
                     jarg = jargs[jargi]
                     if isiterable(jarg):
                         jarg_priors.append(pm.Uniform(jargnames[jargi],lower=jarg[0],upper=jarg[1]))
@@ -191,6 +198,7 @@ class Bam:
 
             self.model=model
         else:
+            summate = np.sum
             sign = np.sign
             clip = np.clip
             cos = np.cos
@@ -208,7 +216,9 @@ class Bam:
             zbl_prior = zbl
             beta_prior = beta
             chi_prior = chi
+            thetabz_prior = thetabz
             spec_prior = spec
+            jarg_priors = jargs
             f_prior = f
             e_prior = e
 
@@ -216,7 +226,8 @@ class Bam:
         self.abs_err = e_prior
         self.tf = zbl_prior
         self.r_g = M_prior * Gpercsq
-        self.D_prior = D_prior
+        # self.D_prior = D_prior
+        # self.M_prior = M_prior
         #this is the end of the problem setup;
         #everything after this point should bifurcate depending on calctype
         if calctype == 'approx':
@@ -227,8 +238,8 @@ class Bam:
             #     return rho
 
             def emission_coordinates(rho, varphi):
-                phi = arctan2(sin(varphi),cos(varphi)*cos(inc_rad))
-                sinprod = sin(inc_rad)*sin(phi)
+                phi = arctan2(sin(varphi),cos(varphi)*cos(inc_prior))
+                sinprod = sin(inc_prior)*sin(phi)
                 numerator = 1+rho**2 - (-3+rho**2)*sinprod+3*sinprod**2 + sinprod**3 
                 denomenator = (-1+sinprod)**2 * (1+sinprod)
                 sqq = sqrt(numerator/denomenator)
@@ -237,26 +248,34 @@ class Bam:
 
 
             #convert mudists to gravitational units
-            rho = self.D_prior / (self.M_prior*Gpercsq) * MUDISTS
+            rho = D_prior / (M_prior*Gpercsq) * MUDISTS
             self.rhovec = rho.flatten()
 
             rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
-            rvec = clip(rvec, 2.+1.e-9,np.inf)
+            rvec = clip(rvec, 2.+1.e-5,np.inf)
+            self.rvec = rvec
+            self.phivec = phivec
             #begin Ramesh formalism
-            eta = self.chi_prior+np.pi
-            beq = sin(self.thetabz_prior)
-            bz = cos(self.thetabz_prior)
+            eta = chi_prior+np.pi
+            beq = sin(thetabz_prior)
+            bz = cos(thetabz_prior)
             br = beq*cos(eta)
             bphi = beq*sin(eta)
+            coschi = cos(chi_prior)
+            sinchi = sin(chi_prior)
+            betax = beta_prior*coschi
+            betay = beta_prior*sinchi
             bx = br
             by = bphi
 
             bmag = sqrt(bx**2 + by**2 + bz**2)
-            gfac = sqrt(1. - 2./r)
+            gfac = sqrt(1. - 2./rvec)
             gfacinv = 1. / gfac
             gamma = 1. / sqrt(1. - beta**2)
 
             sintheta = sin(inc_prior)
+            # print(inc_prior)
+            # print(sintheta)
             costheta = cos(inc_prior)
             sinphi = sin(phivec)
             cosphi = cos(phivec)
@@ -264,7 +283,7 @@ class Bam:
             cospsi = -sintheta * sinphi
             sinpsi = sqrt(1. - cospsi**2)
 
-            cosalpha = 1. - (1. - cospsi) * (1. - 2./r)
+            cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
             sinalpha =sqrt(1. - cosalpha**2)
 
             
@@ -291,21 +310,20 @@ class Bam:
             # polfac = np.sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
             sinzeta = sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
 
-            profile = self.jfunc(rvec, phivec, self.jarg_priors)
+            profile = self.jfunc(rvec, phivec, jarg_priors)
             # 
-
-            polarizedintensity = sinzeta**(1+self.spec_prior) * delta**(3. + self.spec_prior) * profile
+            # print(self.profile)
+            polarizedintensity = sinzeta**(1+spec_prior) * delta**(3. + spec_prior) * profile
             
             # if INTENSITYISOTROPIC:
             #     intensity = delta**(3. + SPECTRALINDEX)
             # else:
             #     intensity = polarizedintensity
             
-            mag = polarizedintensity
                 
             pathlength = kFthat/kFzhat
-            if path:
-                mag *= pathlength
+            mag = polarizedintensity*pathlength
+            
 
             fFthat = 0
             fFxhat = kcrossbx / (kFthat * bmag)
@@ -329,15 +347,17 @@ class Bam:
             fPthhat = -fPzhat
             fPphat = fPyhat
                
-            k1 = r * (kPthat * fPrhat - kPrhat * fPthat)
-            k2 = -r * (kPphat * fPthhat - kPthhat * fPphat)
+            k1 = rvec * (kPthat * fPrhat - kPrhat * fPthat)
+            k2 = -rvec * (kPphat * fPthhat - kPthhat * fPphat)
                 
-            kOlp = r * kPphat
+            kOlp = rvec * kPphat
             radicand = kPthhat**2 - kPphat**2 * costheta**2 / sintheta**2
             # due to machine precision, some small negative values are present. We clip these here.
             # radicand[radicand<0] = 0
             radical = sqrt(clip(radicand,0.,np.inf))
-            kOlth = r * radical * sign(sinphi)
+            # plt.imshow(radicand)
+            # plt.show()
+            kOlth = rvec * radical * sign(sinphi)
 
             xalpha = -kOlp / sintheta
             ybeta = kOlth
@@ -350,28 +370,21 @@ class Bam:
             qvec = -mag*(ealpha**2 - ebeta**2)
             uvec = -mag*(2*ealpha*ebeta)
             ivec = sqrt(qvec**2 + uvec**2)
-            self.tf = pm.math.sum(ivec)
-            self.qvec = qvec * self.zbl_prior/self.tf
-            self.uvec = uvec * self.zbl_prior/self.tf
-            self.ivec = ivec * self.zbl_prior/self.tf
-            # im.qvec = q.flatten()
-            # im.uvec = u.flatten()
-            # im.ivec = np.sqrt(im.qvec**2+im.uvec**2)/m
-            # conversion = total_flux/im.total_flux()
-            # im.ivec *= conversion
-            # im.qvec *= conversion
-            # im.uvec *= conversion
 
-            # #rotate the final image
-            # im  = im.rotate(rotation_deg*np.pi/180)
+            tf = summate(ivec)
+            self.qvec = qvec * zbl_prior/tf
+            self.uvec = uvec * zbl_prior/tf
+            self.ivec = ivec * zbl_prior/tf
+            #now do the rotation
 
-            # return im
+            self.rotimxvec = cos(PA_prior)*self.imxvec - sin(PA_prior)*self.imyvec
+            self.rotimyvec = sin(PA_prior)*self.imxvec + cos(PA_prior)*self.imyvec
             
             print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)  
         elif calctype == 'exact':
             pass
 
-    def unscaled_vis(self,u,v):
+    def fixed_vis(self,u,v):
         if self.mode == 'model':
             print("Direct visibility computation is not possible in modeling mode!")
             return
@@ -381,28 +394,22 @@ class Bam:
 
         A_reals = []
         A_imags = []
-        for n in range(self.nmax+1):
-            if self.calctype == 'approx':
-                matrix = np.outer(u, -(-1.)**n*(self.r_g/self.D_prior)*(self.x_c+self.delta_xvec*np.exp(-self.deltawas[n]))) + np.outer(v, (-1.)**n *(self.r_g/self.D_prior)* (self.y_c+self.delta_yvec*np.exp(-self.deltawas[n])))
-            elif self.calctype == 'exact':
-                matrix = np.outer(u, (self.r_g/self.D_prior)*self.imxvecs[n]) + np.outer(v, (self.r_g/self.D_prior)*self.imyvecs[n])
-            A_reals.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*np.cos(2.0*np.pi*matrix))
-            A_imags.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*np.sin(2.0*np.pi*matrix))
-        
-        A_real = np.sum(A_reals, axis=0)
-        A_imag = np.sum(A_imags, axis=0)
+        # for n in range(self.nmax+1):
+            # if self.calctype == 'approx':
+            #     matrix = np.outer(u, -(-1.)**n*(self.r_g/self.D_prior)*(self.x_c+self.delta_xvec*np.exp(-self.deltawas[n]))) + np.outer(v, (-1.)**n *(self.r_g/self.D_prior)* (self.y_c+self.delta_yvec*np.exp(-self.deltawas[n])))
+            # elif self.calctype == 'exact':
+            #     matrix = np.outer(u, (self.r_g/self.D_prior)*self.imxvecs[n]) + np.outer(v, (self.r_g/self.D_prior)*self.imyvecs[n])
+            # A_reals.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*np.cos(2.0*np.pi*matrix))
+            # A_imags.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*np.sin(2.0*np.pi*matrix))
+        matrix = np.outer(u, self.rotimxvec)+np.outer(v, self.rotimyvec)
+        # A_real = np.sum(A_reals, axis=0)
+        # A_imag = np.sum(A_imags, axis=0)
+        A_real = np.cos(2.0*np.pi*matrix)
+        A_imag = np.sin(2.0*np.pi*matrix)
         visreal_model = np.dot(A_real,self.blixels)
         visimag_model = np.dot(A_imag,self.blixels)
 
-        return visreal_model + 1j* visimag_model + 1.
-
-    def vis(self, u, v):
-        if self.mode == 'model':
-            print("Direct visibility computation is not possible in modeling mode!")
-            return
-        unscaled = self.unscaled_vis(u,v)
-        total_flux = self.unscaled_vis(0,0)
-        return self.tf / total_flux * unscaled
+        return visreal_model + 1j* visimag_model
 
     def cphase(self, u1, u2, u3, v1, v2, v3):
         if self.mode == 'model':
@@ -485,24 +492,33 @@ class Bam:
 
 
     def get_model_vis(self, u, v):
-        print("Building u * x matrices.")
-        A_reals = []
-        A_imags = []
-        for n in range(self.nmax+1):
+        # print("Building u * x matrices.")
+        # A_reals = []
+        # A_imags = []
+        # for n in range(self.nmax+1):
 
-            matrix = tt.outer(u, -(-1.)**n*(self.r_g/self.D_prior)*(self.x_c+self.delta_xvec*pm.math.exp(-self.deltawas[n]))) + tt.outer(v, (-1.)**n *(self.r_g/self.D_prior)*(self.y_c+self.delta_yvec*pm.math.exp(-self.deltawas[n])))
-            A_reals.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*pm.math.cos(2.0*np.pi*matrix))
-            A_imags.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*pm.math.sin(2.0*np.pi*matrix))
+        #     matrix = tt.outer(u, -(-1.)**n*(self.r_g/self.D_prior)*(self.x_c+self.delta_xvec*pm.math.exp(-self.deltawas[n]))) + tt.outer(v, (-1.)**n *(self.r_g/self.D_prior)*(self.y_c+self.delta_yvec*pm.math.exp(-self.deltawas[n])))
+        #     A_reals.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*pm.math.cos(2.0*np.pi*matrix))
+        #     A_imags.append(self.gains[n]*self.pathlengths[n]*self.boosts[n]*pm.math.sin(2.0*np.pi*matrix))
         # matrices = [tt.outer(u, (-1.)**n*(self.x_c+self.delta_xvec*np.exp(-np.pi*n))) + tt.outer(v, (-1.)**n * (self.y_c+self.delta_yvec*np.exp(-np.pi*n))) for n in range(nmax+1)]
         # print("Building FT coeff matrices.")
         # A_reals = [ for n in range(nmax+1)]
         # A_imags = [ for n in range(nmax+1)]
-        print("Stacking.")
-        A_real = pm.math.sum(A_reals, axis=0)
-        A_imag = pm.math.sum(A_imags, axis=0)
-        print("Dotting.")
-        visreal_model = pm.math.dot(A_real,self.blixels) + 1.
+        # print("Stacking.")
+        # A_real = pm.math.sum(A_reals, axis=0)
+        # A_imag = pm.math.sum(A_imags, axis=0)
+        # print("Dotting.")
+        # visreal_model = pm.math.dot(A_real,self.blixels) + 1.
+        # visimag_model = pm.math.dot(A_imag,self.blixels)
+        
+        matrix = tt.outer(u, self.rotimxvec)+tt.outer(v, self.rotimyvec)
+        # A_real = np.sum(A_reals, axis=0)
+        # A_imag = np.sum(A_imags, axis=0)
+        A_real = np.cos(2.0*np.pi*matrix)
+        A_imag = np.sin(2.0*np.pi*matrix)
+        visreal_model = pm.math.dot(A_real,self.blixels)
         visimag_model = pm.math.dot(A_imag,self.blixels)
+
         return visreal_model, visimag_model
 
 
@@ -527,17 +543,18 @@ class Bam:
             with self.model:
                 # real, imag = self.vis(u, v, nmax=nmax)
                 # print("Building FT matr"+str(n)+".")
-                total_flux, _ = self.get_model_vis(theano.shared(np.array([0])),theano.shared(np.array([0])))
+                # total_flux, _ = self.get_model_vis(theano.shared(np.array([0])),theano.shared(np.array([0])))
                 visreal_model, visimag_model = self.get_model_vis(u,v)
-                real_likelihood = pm.Normal('vis_real', mu=self.tf / total_flux[0] * visreal_model, sd=sd,observed=np.real(vis))
-                imag_likelihood = pm.Normal('vis_imag', mu=self.tf / total_flux[0] * visimag_model, sd=sd,observed=np.imag(vis))
+                real_likelihood = pm.Normal('vis_real', mu= visreal_model, sd=sd,observed=np.real(vis))
+                imag_likelihood = pm.Normal('vis_imag', mu= visimag_model, sd=sd,observed=np.imag(vis))
                 print("Constructed approx vis likelihoods.")
         elif self.calctype == 'exact':
-            self.loglgrad = LogLikeGrad(exact_vis_loglike, self.rvec, self.phivec, self.nmax, u, v, vis, sigma, sys_err = 0.02, abs_err=0.005)
-            self.loglwithgrad = LogLikeWithGrad(exact_vis_loglike, self.rvec, self.phivec, self.nmax, u, v, vis, sigma, sys_err = 0.02, abs_err=0.005)
-            with self.model:
-                likelihood = pm.DensityDist("likelihood", lambda v: self.logl(v), observed={"v": self.theta})
-                print("Constructed exact vis likelihoods")
+            pass
+            # self.loglgrad = LogLikeGrad(exact_vis_loglike, self.rvec, self.phivec, self.nmax, u, v, vis, sigma, sys_err = 0.02, abs_err=0.005)
+            # self.loglwithgrad = LogLikeWithGrad(exact_vis_loglike, self.rvec, self.phivec, self.nmax, u, v, vis, sigma, sys_err = 0.02, abs_err=0.005)
+            # with self.model:
+            #     likelihood = pm.DensityDist("likelihood", lambda v: self.logl(v), observed={"v": self.theta})
+            #     print("Constructed exact vis likelihoods")
 
     def build_amp_likelihood(self, obs):
         """
@@ -654,71 +671,7 @@ class Bam:
             # self.trace = pm.sample(draws=draws,step=step, init=init, start=start,trace=trace,chains=chains,cores=cores,tune=tune)
         print("Finished generating trace.")
 
-    def plot_screen_n0(self, outname='n0im.png',save=True):
-        """
-        Plots the screen positions of the direct image of each blixel.
-        """
-        plt.plot(self.imxvec, self.imyvec,'.')
-        plt.title('Direct Image Lensed Positions')
-        if save:
-            plt.savefig(outname,bbox_inches='tight')
-        plt.show()
 
-
-    def plot_screen_n(self,n=2,outname = 'singlenim.png',save=True):
-        if self.calctype == 'approx':
-            xs = (-1.)**n*(self.x_c+self.delta_xvec*np.exp(-self.deltawas[n]))
-            ys = (-1.)**n * (self.y_c+self.delta_yvec*np.exp(-self.deltawas[n]))
-        elif self.calctype == 'exact':
-            xs = self.imxvecs[n]
-            ys = self.imyvecs[n]
-        # xs = (-1.)**n*(self.x_c+self.delta_xvec*np.exp(-np.pi*n))
-        # ys = (-1.)**n*(self.y_c+self.delta_yvec*np.exp(-np.pi*n))
-        # print(ys)
-        plt.plot(xs,ys,'.')#,label=str(n))
-        # plt.legend()
-        plt.title('n = '+str(n))
-        plt.gca().set_aspect('equal')
-        plt.gca().set_xticks(plt.yticks()[0])
-        if save:
-            plt.savefig(outname,bbox_inches='tight',dpi=300)
-        plt.show()
-
-    def plot_screen_n_upto(self,nmax=2,outname = 'multinim.png',save=True):
-        if self.calctype == 'approx':
-            xs = [(-1.)**n*(self.x_c+self.delta_xvec*np.exp(-self.deltawas[n]))/eh.RADPERUAS for n in range(nmax+1)]
-            ys = [(-1.)**n * (self.y_c+self.delta_yvec*np.exp(-self.deltawas[n]))/eh.RADPERUAS for n in range(nmax+1)]
-        elif self.calctype == 'exact':
-            xs = self.imxvecs[:nmax+1]
-            ys = self.imyvecs[:nmax+1]
-        # print(ys)
-        for n in range(nmax+1):
-            plt.plot(xs[n],ys[n],'.',label='n = '+str(n),markersize=10/(n+1))
-        plt.legend()
-        plt.gca().set_aspect('equal')
-        plt.gca().set_xticks(plt.yticks()[0])
-        plt.xlabel(r'$\alpha$ ($\mu$as)')
-        plt.ylabel(r'$\beta$ ($\mu$as)')
-        plt.title("Lensed subring positions")
-        if save:
-            plt.savefig(outname,bbox_inches='tight',dpi=300)
-        plt.show()
-
-    def plot_blixels(self,outname= 'blixels.png',save=True):
-        """
-        Plots the screen positions of the direct image of each blixel.
-        """
-        plt.plot(self.xvec, self.yvec,'.')
-        plt.title('Blixel Positions')
-        plt.xlabel('x (M)')
-        plt.ylabel('y (M)')
-        plt.gca().set_aspect('equal')
-        yticks = plt.yticks()[0]
-
-        plt.gca().set_xticks(yticks)
-        if save:
-            plt.savefig(outname,bbox_inches='tight',dpi=300)
-        plt.show()
 
 
     def save_traceplot(self, name ='traceplot.png'):
@@ -755,7 +708,7 @@ class Bam:
 
 
 
-    def make_image(self, fov, npix, kernel, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87'):
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87'):
         """
         Returns an ehtim Image object corresponding to the Blimage n0 emission
         """
@@ -764,98 +717,13 @@ class Bam:
             print("Cannot directly make images in model mode! Call sample_blimage or MAP_blimage and display that!")
             return
 
-        im = eh.image.make_empty(npix,fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
+        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
+        im.ivec = self.ivec
+        im.qvec = self.qvec
+        im.uvec = self.uvec
 
-        pxi = (np.arange(npix)-0.01)/npix-0.5
-        pxj = np.arange(npix)/npix-0.5
-        # get angles measured East of North
-        PXI,PXJ = np.meshgrid(pxi,pxj)
-        varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
-        # varphi[varphi<0.] += 2.*np.pi
-
-        #get grid of angular radii
-        mui = pxi*fov
-        muj = pxj*fov
-        MUI,MUJ = np.meshgrid(mui,muj)
-        MUDISTS = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
-        rho = self.D / (Gpercsq * self.M) * MUDISTS
-        # plt.imshow(rho)
-        # plt.colorbar()
-        # plt.show()
-        # self.cospsi0 = -sin(inc_prior)*np.sin(self.phivec)
-        # self.cosalpha0 = self.cospsi0 + 2/self.rvec *(1-self.cospsi0)
-
-        # # self.cosalpha0prime = -self.cosalpha0
-        # # self.cospsi0prime = - (self.cosalpha0+2/self.rvec)/(1-2/self.rvec)
-
-        # self.psi0 = arccos(self.cospsi0)
-        # self.psi1 = -(2*np.pi-self.psi0)
-
-        # self.alpha0 = np.pi - arccos(self.cosalpha0)
-
-
-        # #build list of alphas
-        # self.alphas = []
-        # self.alphaprimes = []
-        # for n in range(nmax+1):
-        #     if n == 0:
-        #         self.alphas.append(self.alpha0)
-        #         self.alphaprimes.append(np.pi-self.alpha0)
-        #     else:
-        #         alpha = np.arcsin((-1)**n * np.sqrt(1-2/self.rvec) * np.sqrt(27)/self.rvec)
-        #         alpha[self.rvec > 3] =  (-1)**n * (np.pi - (-1)**n * alpha[self.rvec>3])
-        #         self.alphas.append(alpha)
-        #         self.alphaprimes.append(np.pi-alpha)
-
-        # #build list of all relevant psis
-        # self.psis = []
-        # self.psiprimes = []
-        # for n in range(nmax+1):
-        #     if n == 0:
-        #         self.psis.append(self.psi0)
-        #     elif n == 1:
-        #         self.psis.append(self.psi1)
-        #     else:
-        #         self.psis.append(self.psis[n-2]+2*np.pi*(-1)**n)
-        #     self.psiprimes.append((-1)**n * arccos(-(cos(self.alphas[n]) + 2./self.rvec)/(1.-2./self.rvec)))
-            
-        # #finally, build winding angles
-        # self.winding_angles = [self.psis[n]+self.psiprimes[n]-np.pi*(-1)**n for n in range(nmax+1)]
-        # self.deltawas = [sqrt(self.winding_angles[n]**2) - sqrt(self.winding_angles[0]**2) for n in range(nmax+1)]
-        
-        for n in range(self.nmax+1):
-            #convert mudists to gravitational units
-            rho_sub = np.sqrt(27) + (rho-np.sqrt(27))*np.exp(np.pi*n)
-            varphi_sub = varphi+np.pi*n
-            r, phi = emission_coordinates(rho_sub, varphi_sub, self.inc)
-            
-            x = r*np.cos(phi)
-            y = r*np.sin(phi)
-            # plt.imshow(x)
-            # plt.colorbar()
-            # plt.show()
-            # im.ivec += self.blixels /(kernel*2*np.pi)* np.exp(-(self.xvec-x)**2 / (2*kernel**2) - (self.yvec-y)**2 / (2*kernel**2))            
-
-            addvec = np.zeros_like(x)
-            for veci in range(self.nblix):
-                blixvec = (self.gains[n][veci]*self.boosts[n][veci]*self.pathlengths[n][veci]* self.blixels[veci] /(kernel*2*np.pi)* np.exp(-(self.xvec[veci]-x)**2 / (2*kernel**2) - (self.yvec[veci]-y)**2 / (2*kernel**2)))
-                blixvec[rho_sub<0] = 0
-                addvec+=blixvec
-            # plt.imshow(addvec)
-            # plt.colorbar()
-            # plt.show()
-            # print(np.sum(addvec))
-            if np.sum(addvec)>0:
-                if n > 0:
-                    addvec *= prior_flux / np.sum(addvec) * np.exp(-np.pi*n)
-            prior_flux = np.sum(addvec)
-            if n ==0:
-                addvec += 1/(kernel*2*np.pi)* np.exp(-(x)**2 / (2*kernel**2) - (y)**2 / (2*kernel**2))
-            im.ivec += addvec.flatten()
-            # print(prior_flux)
         im = im.rotate(self.PA)
-        im.ivec[im.ivec<0]=0.
-        im.ivec *= self.tf / im.total_flux()
+        # im.ivec *= self.tf / im.total_flux()
         return im
 
     def MAP_blimage(self):

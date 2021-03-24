@@ -14,15 +14,15 @@ import eht_dmc as dmc
 # theano.config.exception_verbosity='high'
 theano.config.compute_test_value = 'ignore'
 
-def example_fixed_jfunc(r, phi, jargs):
-    peak_r = jargs[0]
-    thickness = jargs[1]
-    return np.exp(-4*np.log(2)*((r-peak_r)/thickness)**2)
+# def example_fixed_jfunc(r, phi, jargs):
+#     peak_r = jargs[0]
+#     thickness = jargs[1]
+#     return np.exp(-4.*np.log(2)*((r-peak_r)/thickness)**2)
 
-def example_model_jfunc(r, phi, jargs):
-    peak_r = jargs[0]
-    thickness = jargs[1]
-    return pm.math.exp(-4*np.log(2)*((r-peak_R)/thickness)**2)
+# def example_model_jfunc(r, phi, jargs):
+#     peak_r = jargs[0]
+#     thickness = jargs[1]
+#     return pm.math.exp(-4.*np.log(2)*((r-peak_r)/thickness)**2)
 
 
 class Bam:
@@ -699,11 +699,11 @@ class Bam:
 
             self.save_traceplot(name = out_dir+'traceplot'+str(i).zfill(2)+'.png')
             self.save_energyplot(name=out_dir+'energyplot'+str(i).zfill(2)+'.png')
-            blim = self.random_sample_blimage()
-            blim.save_blimage(out_dir+'random_blimage'+str(i).zfill(2)+'.pkl')
-            im = blim.make_image(fov, npix,kernel)
-            im.save_fits(out_dir+'random_image'+str(i).zfill(2)+'.fits')
-            im.display(show=False, export_pdf=out_dir+'random_image'+str(i).zfill(2)+'.png')
+            # blim = self.random_sample_blimage()
+            # blim.save_blimage(out_dir+'random_blimage'+str(i).zfill(2)+'.pkl')
+            # im = blim.make_image(fov, npix,kernel)
+            # im.save_fits(out_dir+'random_image'+str(i).zfill(2)+'.fits')
+            # im.display(show=False, export_pdf=out_dir+'random_image'+str(i).zfill(2)+'.png')
             self.save_trace(directory=out_dir+'trace/', overwrite=True)
 
 

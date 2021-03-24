@@ -178,7 +178,7 @@ class Bam:
                 for jargi in range(len(jargs)):
                     jarg = jargs[jargi]
                     if isiterable(jarg):
-                        jarg_priors.append(pm.Uniform(jargnames[jargi],lower=jarg[0],upper=jarg[1]))
+                        jarg_priors.append(pm.Uniform(jarg_names[jargi],lower=jarg[0],upper=jarg[1]))
                     else:
                         jarg_priors.append(jarg)
                
@@ -248,8 +248,8 @@ class Bam:
 
 
             #convert mudists to gravitational units
-            rho = D_prior / (M_prior*Gpercsq) * MUDISTS
-            self.rhovec = rho.flatten()
+            rho = D_prior / (M_prior*Gpercsq) * self.MUDISTS
+            self.rhovec = rho#.flatten()
 
             rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
             rvec = clip(rvec, 2.+1.e-5,np.inf)
@@ -659,7 +659,7 @@ class Bam:
         return self.MAP_estimate
 
 
-    def sample(self, init='jitter+adapt_full', draws=1000, start=None, tune=1000, step=None, chains=1, discard_tuned_samples=False):#, draws=5000, step=None, init='auto', start=None, trace=None, chains=None, cores=None, tune=1000):
+    def sample(self, init='auto', draws=1000, start=None, tune=1000, step=None, chains=1, discard_tuned_samples=False):#, draws=5000, step=None, init='auto', start=None, trace=None, chains=None, cores=None, tune=1000):
         """
         Thin wrapper around the pymc3 sample method. 
         """
@@ -667,7 +667,7 @@ class Bam:
             if step == None:
                 step = pm.NUTS()
             self.trace = pm.sample(init=init, draws=draws, start=start, tune=tune, step=step, chains=chains, discard_tuned_samples=discard_tuned_samples)
-
+            # self.trace = pm.sample(500, return_inferencedata=False, chains=1)
             # self.trace = pm.sample(draws=draws,step=step, init=init, start=start,trace=trace,chains=chains,cores=cores,tune=tune)
         print("Finished generating trace.")
 
@@ -726,7 +726,7 @@ class Bam:
         # im.ivec *= self.tf / im.total_flux()
         return im
 
-    def MAP_blimage(self):
+    def MAP_Bam(self):
         ME = self.MAP_estimate
         if isiterable(self.M):
             M_new = float(ME['M'])
@@ -768,6 +768,11 @@ class Bam:
         else:
             spec_new = self.spec
 
+        if isiterable(self.thetabz):
+            thetabz_new = float(ME['thetabz'])
+        else:
+            thetabz_new = self.thetabz
+
         if isiterable(self.f):
             f_new = float(ME['f'])
         else:
@@ -777,6 +782,17 @@ class Bam:
             e_new = float(ME['e'])
         else:
             e_new = self.e
+
+        # jarg_names = self.jarg_names
+
+        # for jargi in range(len(self.jargs)):
+        #     jarg = jargs[jargi]
+        #     if isiterable(jarg):
+        #         jarg_priors.append(pm.Uniform(jarg_names[jargi],lower=jarg[0],upper=jarg[1]))
+        #     else:
+        #         jarg_priors.append(jarg)
+       
+
 
         new_blimage = Blimage(self.r_lims, self.phi_lims, self.nr, self.nphi, M_new, D_new, inc_new, 0, zbl_new, PA=PA_new, beta=beta_new, chi=chi_new, spec=spec_new, nmax = self.nmax,e=e_new,f=f_new)
   

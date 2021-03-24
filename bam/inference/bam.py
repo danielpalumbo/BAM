@@ -12,7 +12,7 @@ import eht_dmc as dmc
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # theano.config.exception_verbosity='high'
-theano.config.compute_test_value = 'ignore'
+# theano.config.compute_test_value = 'ignore'
 
 # def example_fixed_jfunc(r, phi, jargs):
 #     peak_r = jargs[0]
@@ -82,9 +82,15 @@ class Bam:
 
 
         if self.mode == 'model':
+            self.varphivec = pm.math.constant(self.varphivec)
+            self.MUDISTS = pm.math.constant(self.MUDISTS)
+            self.imxvec = pm.math.constant(self.imxvec)
+            self.imyvec = pm.math.constant(self.imyvec)
+            sqr = pm.math.sqr
             summate = pm.math.sum
             sign = pm.math.sgn
             clip = pm.math.clip
+            maximum = pm.math.maximum
             cos = pm.math.cos
             sin = pm.math.sin
             arccos = tt.basic.arccos
@@ -99,6 +105,7 @@ class Bam:
                 if isiterable(M):
                     M_prior = pm.Uniform('M',lower=M[0],upper=M[1])#, testval=np.mean([M[0],M[1]]))
                     # self.modeled_priors.append(M_prior)
+                    # M_prior = pm.Normal('M',mu=(M[0]+M[1])/2, sigma=M[1]-M[0])
                 else:
                     M_prior = M
                 # self.
@@ -111,6 +118,7 @@ class Bam:
                 if isiterable(inc):
                     inc_prior = pm.Uniform('inc',lower=inc[0],upper=inc[1])#, testval=np.mean([inc[0],inc[1]]))
                     # self.modeled_priors.append(inc_prior)
+                    # inc_prior = pm.Normal('inc',mu=(inc[0]+inc[1])/2, sigma=inc[1]-inc[0])
                 else:
                     inc_prior = inc
 
@@ -198,8 +206,10 @@ class Bam:
 
             self.model=model
         else:
+            sqr = lambda x: np.power(x,2)
             summate = np.sum
             sign = np.sign
+            maximum = np.maximum
             clip = np.clip
             cos = np.cos
             sin = np.sin
@@ -237,22 +247,26 @@ class Bam:
             #     rho = sqrt(rho2)
             #     return rho
 
-            def emission_coordinates(rho, varphi):
-                phi = arctan2(sin(varphi),cos(varphi)*cos(inc_prior))
-                sinprod = sin(inc_prior)*sin(phi)
-                numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
-                denomenator = (-1.+sinprod)**2 * (1+sinprod)
-                sqq = sqrt(numerator/denomenator)
-                r = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
-                return r, phi
+            # def emission_coordinates(rho, varphi):
+                
 
 
             #convert mudists to gravitational units
             rho = D_prior / (M_prior*Gpercsq) * self.MUDISTS
             self.rhovec = rho#.flatten()
 
-            rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
-            rvec = clip(rvec, 2.+1.e-5,np.inf)
+            phivec = arctan2(sin(self.varphivec),cos(self.varphivec)*cos(inc_prior))
+            sinprod = sin(inc_prior)*sin(phivec)
+            numerator = 1.+sqr(rho) - (-3.+sqr(rho))*sinprod+3.*sqr(sinprod) + sinprod*sqr(sinprod) 
+            denomenator = sqr(-1.+sinprod) * (1+sinprod)
+            sqq = sqrt(numerator/denomenator)
+            rvec = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
+             
+
+            # rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
+            # rvec = clip(rvec, 2.+1.e-5,np.inf)
+            rvec = ((rvec-2)+sqrt(sqr(rvec-2)))/2.+2.0001
+            # rvec = maximum(rvec, 2.00001)
             self.rvec = rvec
             self.phivec = phivec
             #begin Ramesh formalism
@@ -268,10 +282,10 @@ class Bam:
             bx = br
             by = bphi
 
-            bmag = sqrt(bx**2 + by**2 + bz**2)
+            bmag = sqrt(sqr(bx) + sqr(by) + sqr(bz))
             gfac = sqrt(1. - 2./rvec)
             gfacinv = 1. / gfac
-            gamma = 1. / sqrt(1. - beta**2)
+            gamma = 1. / sqrt(1. - sqr(beta))
 
             sintheta = sin(inc_prior)
             # print(inc_prior)
@@ -281,10 +295,10 @@ class Bam:
             cosphi = cos(phivec)
 
             cospsi = -sintheta * sinphi
-            sinpsi = sqrt(1. - cospsi**2)
+            sinpsi = sqrt(1. - sqr(cospsi))
 
             cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
-            sinalpha =sqrt(1. - cosalpha**2)
+            sinalpha =sqrt(1. - sqr(cosalpha))
 
             
             sinxi = sintheta * cosphi / sinpsi
@@ -296,8 +310,8 @@ class Bam:
             kPzhat = cosxi * sinalpha * gfacinv
             
             kFthat = gamma * (kPthat - betax * kPxhat - betay * kPyhat)
-            kFxhat = -gamma * betax * kPthat + (1. + (gamma-1.) * coschi**2) * kPxhat + (gamma-1.) * coschi * sinchi * kPyhat
-            kFyhat = -gamma * betay * kPthat + (gamma-1.) * sinchi * coschi * kPxhat + (1. + (gamma-1.) * sinchi**2) * kPyhat
+            kFxhat = -gamma * betax * kPthat + (1. + (gamma-1.) * sqr(coschi)) * kPxhat + (gamma-1.) * coschi * sinchi * kPyhat
+            kFyhat = -gamma * betay * kPthat + (gamma-1.) * sinchi * coschi * kPxhat + (1. + (gamma-1.) * sqr(sinchi)) * kPyhat
             kFzhat = kPzhat
 
 
@@ -308,9 +322,10 @@ class Bam:
             kcrossbz = kFxhat * by - kFyhat * bx
 
             # polfac = np.sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
-            sinzeta = sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
+            sinzeta = sqrt(sqr(kcrossbx) + sqr(kcrossby) + sqr(kcrossbz)) / (kFthat * bmag)
 
             profile = self.jfunc(rvec, phivec, jarg_priors)
+            # profile=1.
             # 
             # print(self.profile)
             polarizedintensity = sinzeta**(1.+spec_prior) * delta**(3. + spec_prior) * profile
@@ -336,8 +351,8 @@ class Bam:
             # fPzhat = fFzhat
             
             fPthat = gamma * (fFthat + betax * fFxhat + betay * fFyhat)
-            fPxhat = gamma * betax * fFthat + (1. + (gamma-1.) * coschi**2) * fFxhat + (gamma-1.) * coschi * sinchi * fFyhat
-            fPyhat = gamma * betay * fFthat + (gamma-1.) * sinchi * coschi * fFxhat + (1. + (gamma-1.) * sinchi**2) * fFyhat
+            fPxhat = gamma * betax * fFthat + (1. + (gamma-1.) * sqr(coschi)) * fFxhat + (gamma-1.) * coschi * sinchi * fFyhat
+            fPyhat = gamma * betay * fFthat + (gamma-1.) * sinchi * coschi * fFxhat + (1. + (gamma-1.) * sqr(sinchi)) * fFyhat
             fPzhat = fFzhat
 
             kPrhat = kPxhat
@@ -351,25 +366,24 @@ class Bam:
             k2 = -rvec * (kPphat * fPthhat - kPthhat * fPphat)
                 
             kOlp = rvec * kPphat
-            radicand = kPthhat**2 - kPphat**2 * costheta**2 / sintheta**2
-            # due to machine precision, some small negative values are present. We clip these here.
-            # radicand[radicand<0] = 0
-            radical = sqrt(clip(radicand,0.,np.inf))
+            radicand = sqr(kPthhat) - sqr(kPphat) * sqr(costheta) / sqr(sintheta)
+            radicand = (radicand + sqrt(sqr(radicand)))/2
+            radical = sqrt(radicand)
             # plt.imshow(radicand)
             # plt.show()
-            kOlth = rvec * radical * sign(sinphi)
+            kOlth = rvec * radical * sinphi / (sqrt(sqr(sinphi))+1.e-10)
 
             xalpha = -kOlp / sintheta
             ybeta = kOlth
             nu = -xalpha
-            den = sqrt((k1**2 + k2**2) * (ybeta**2 + nu**2))
+            den = sqrt((sqr(k1) + sqr(k2)) * (sqr(ybeta) + sqr(nu)))
 
             ealpha = (ybeta * k2 - nu * k1) / den
             ebeta = (ybeta * k1 + nu * k2) / den
 
-            qvec = -mag*(ealpha**2 - ebeta**2)
+            qvec = -mag*(sqr(ealpha) - sqr(ebeta))
             uvec = -mag*(2*ealpha*ebeta)
-            ivec = sqrt(qvec**2 + uvec**2)
+            ivec = sqrt(sqr(qvec) + sqr(uvec))
 
             tf = summate(ivec)
             self.qvec = qvec * zbl_prior/tf

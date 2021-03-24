@@ -384,7 +384,7 @@ class Bam:
         elif calctype == 'exact':
             pass
 
-    def fixed_vis(self,u,v):
+    def vis(self,u,v):
         if self.mode == 'model':
             print("Direct visibility computation is not possible in modeling mode!")
             return
@@ -406,8 +406,8 @@ class Bam:
         # A_imag = np.sum(A_imags, axis=0)
         A_real = np.cos(2.0*np.pi*matrix)
         A_imag = np.sin(2.0*np.pi*matrix)
-        visreal_model = np.dot(A_real,self.blixels)
-        visimag_model = np.dot(A_imag,self.blixels)
+        visreal_model = np.dot(A_real,self.ivec)
+        visimag_model = np.dot(A_imag,self.ivec)
 
         return visreal_model + 1j* visimag_model
 
@@ -516,8 +516,8 @@ class Bam:
         # A_imag = np.sum(A_imags, axis=0)
         A_real = np.cos(2.0*np.pi*matrix)
         A_imag = np.sin(2.0*np.pi*matrix)
-        visreal_model = pm.math.dot(A_real,self.blixels)
-        visimag_model = pm.math.dot(A_imag,self.blixels)
+        visreal_model = pm.math.dot(A_real,self.ivec)
+        visimag_model = pm.math.dot(A_imag,self.ivec)
 
         return visreal_model, visimag_model
 

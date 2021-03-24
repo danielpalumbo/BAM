@@ -31,7 +31,7 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0,  nmax=0, beta=0, chi=0, thetabz=np.pi/2, spec=1, f=0, e=0, calctype='approx'):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx'):
 
         self.fov = fov
         self.npix = npix
@@ -240,10 +240,10 @@ class Bam:
             def emission_coordinates(rho, varphi):
                 phi = arctan2(sin(varphi),cos(varphi)*cos(inc_prior))
                 sinprod = sin(inc_prior)*sin(phi)
-                numerator = 1+rho**2 - (-3+rho**2)*sinprod+3*sinprod**2 + sinprod**3 
-                denomenator = (-1+sinprod)**2 * (1+sinprod)
+                numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
+                denomenator = (-1.+sinprod)**2 * (1+sinprod)
                 sqq = sqrt(numerator/denomenator)
-                r = (1-sqq + sinprod*(1+sqq))/(sinprod-1)
+                r = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
                 return r, phi
 
 
@@ -296,8 +296,8 @@ class Bam:
             kPzhat = cosxi * sinalpha * gfacinv
             
             kFthat = gamma * (kPthat - betax * kPxhat - betay * kPyhat)
-            kFxhat = -gamma * betax * kPthat + (1 + (gamma-1) * coschi**2) * kPxhat + (gamma-1) * coschi * sinchi * kPyhat
-            kFyhat = -gamma * betay * kPthat + (gamma-1) * sinchi * coschi * kPxhat + (1 + (gamma-1) * sinchi**2) * kPyhat
+            kFxhat = -gamma * betax * kPthat + (1. + (gamma-1.) * coschi**2) * kPxhat + (gamma-1.) * coschi * sinchi * kPyhat
+            kFyhat = -gamma * betay * kPthat + (gamma-1.) * sinchi * coschi * kPxhat + (1. + (gamma-1.) * sinchi**2) * kPyhat
             kFzhat = kPzhat
 
 
@@ -313,7 +313,7 @@ class Bam:
             profile = self.jfunc(rvec, phivec, jarg_priors)
             # 
             # print(self.profile)
-            polarizedintensity = sinzeta**(1+spec_prior) * delta**(3. + spec_prior) * profile
+            polarizedintensity = sinzeta**(1.+spec_prior) * delta**(3. + spec_prior) * profile
             
             # if INTENSITYISOTROPIC:
             #     intensity = delta**(3. + SPECTRALINDEX)
@@ -325,7 +325,7 @@ class Bam:
             mag = polarizedintensity*pathlength
             
 
-            fFthat = 0
+            fFthat = 0.
             fFxhat = kcrossbx / (kFthat * bmag)
             fFyhat = kcrossby / (kFthat * bmag)
             fFzhat = kcrossbz / (kFthat * bmag)
@@ -336,8 +336,8 @@ class Bam:
             # fPzhat = fFzhat
             
             fPthat = gamma * (fFthat + betax * fFxhat + betay * fFyhat)
-            fPxhat = gamma * betax * fFthat + (1 + (gamma-1) * coschi**2) * fFxhat + (gamma-1) * coschi * sinchi * fFyhat
-            fPyhat = gamma * betay * fFthat + (gamma-1) * sinchi * coschi * fFxhat + (1 + (gamma-1) * sinchi**2) * fFyhat
+            fPxhat = gamma * betax * fFthat + (1. + (gamma-1.) * coschi**2) * fFxhat + (gamma-1.) * coschi * sinchi * fFyhat
+            fPyhat = gamma * betay * fFthat + (gamma-1.) * sinchi * coschi * fFxhat + (1. + (gamma-1.) * sinchi**2) * fFyhat
             fPzhat = fFzhat
 
             kPrhat = kPxhat

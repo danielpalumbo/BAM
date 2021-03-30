@@ -22,7 +22,7 @@ def example_jfunc(r, phi, jargs):
 #     return pm.math.exp(-4.*np.log(2)*((r-peak_r)/thickness)**2)
 
 def get_uniform_transform(lower, upper):
-    return lambda x: (upper-lower)*x - lower
+    return lambda x: (upper-lower)*x + lower
 
 
 
@@ -84,9 +84,12 @@ class Bam:
 
         self.all_params = [M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e]+jargs
         self.all_names = ['M','D','inc','zbl','PA','beta','chi','thetabz','spec','f','e']+jarg_names
-        self.modeled_indices = [i for i in range(len(self.all_params)) if isterable(self.all_params[i])]
-        self.modeled_names = [i for i in self.all_names if isiterable(self.all_params[i])]
+        self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
+        self.modeled_names = [self.all_names[i] for i in self.modeled_indices]
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
+        # print(len(self.modeled_indices))
+        # print(len(self.modeled_names))
+        # print(len(self.modeled_params))
         self.periodic_names = []
         self.periodic_indices=[]
         #if PA and chi are being modeled, check if they are allowing a full 2pi wrap
@@ -98,7 +101,7 @@ class Bam:
                     print("Found periodic prior on "+str(i))
                     self.periodic_names.append(i)
                     self.periodic_indices.append(self.modeled_names.index(i))
-
+        self.model_dim = len(self.modeled_names)
         # self.periodic_names = [i for i in ['PA','chi'] if i in self.modeled_names]
         # self.periodic_indices = [self.modeled_names.index(i) for i in self.periodic_names]
 
@@ -116,7 +119,7 @@ class Bam:
         # self.M = M
         #this is the end of the problem setup;
         #everything after this point should bifurcate depending on calctype
-        if calctype == 'approx':
+        if self.calctype == 'approx':
 
              # def rho_conv(r, phi, D, theta0, r_g):
             #     rho2 = (((r/D)**2.0)*(1.0 - ((sin(theta0)**2.0)*(sin(phi)**2.0)))) + ((2.0*r*r_g/(D**2.0))*((1.0 + (sin(theta0)*sin(phi)))**2.0))
@@ -202,6 +205,7 @@ class Bam:
             # profile=1.
             # 
             # print(self.profile)
+
             polarizedintensity = sinzeta**(1.+spec) * delta**(3. + spec) * profile
             
             # if INTENSITYISOTROPIC:
@@ -241,7 +245,7 @@ class Bam:
                 
             kOlp = rvec * kPphat
             radicand = kPthhat**2 - kPphat**2 * costheta**2 / sintheta**2
-            radican = np.maximum(radicand,0.)
+            radicand = np.maximum(radicand,0.)
             # due to machine precision, some small negative values are present. We clip these here.
             # radicand[radicand<0] = 0
             radical = sqrt(radicand)
@@ -286,6 +290,12 @@ class Bam:
         visimag_model = np.dot(A_imag,vec)
         return visreal_model+1j*visimag_model
 
+    def vis_fixed(self, u, v):
+        imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
+        ivec, qvec, uvec, rotimxvec, rotimyvec = self.compute_image(imparams)
+
+        return self.vis(ivec, rotimxvec, rotimyvec, u, v)
+
     def cphase(self, vec, rotimxvec, rotimyvec, u1, u2, u3, v1, v2, v3):
         
         vis12 = self.vis(vec, rotimxvec, rotimyvec, u1, v1)
@@ -310,6 +320,115 @@ class Bam:
         amp14 = np.abs(vis14)
         logcamp_model = np.log(amp12)+np.log(amp34)-np.log(amp23)-np.log(amp14)
         return logcamp_model
+
+
+
+    def build_likelihood(self, obs, data_types=['vis']):
+        """
+        Given an observation and a list of data product names, 
+        return a likelihood function that accounts for each contribution. 
+        """
+
+        
+        
+        if 'vis' in data_types:
+            vis = obs.data['vis']
+            sigma = obs.data['sigma']
+            amp = obs.unpack('amp')['amp']
+            u = obs.data['u']
+            v = obs.data['v']
+            Nvis = len(vis)
+        if 'logcamp' in data_types:
+            logcamp_data = obs.c_amplitudes(ctype='logcamp')
+            logcamp = logcamp_data['camp']
+            logcamp_sigma = logcamp_data['sigmaca']
+            campu1 = logcamp_data['u1']
+            campu2 = logcamp_data['u2']
+            campu3 = logcamp_data['u3']
+            campu4 = logcamp_data['u4']
+            campv1 = logcamp_data['v1']
+            campv2 = logcamp_data['v2']
+            campv3 = logcamp_data['v3']
+            campv4 = logcamp_data['v4']
+            Ncamp = len(logcamp)
+        if 'cphase' in data_types:
+            cphase_data = obs.c_phases(ang_unit='rad')
+            cphaseu1 = cphase_data['u1']
+            cphaseu2 = cphase_data['u2']
+            cphaseu3 = cphase_data['u3']
+            cphasev1 = cphase_data['v1']
+            cphasev2 = cphase_data['v2']
+            cphasev3 = cphase_data['v3']
+            cphase = cphase_data['cphase']
+            cphase_sigma = cphase_data['sigmacp']
+            Ncphase = len(cphase)
+
+        def loglike(params):
+            to_eval = []
+            for name in self.all_names:
+                if not(name in self.modeled_names):
+                    to_eval.append(self.all_params[self.all_names.index(name)])
+                else:
+                    to_eval.append(params[self.modeled_names.index(name)])
+            #at this point, to_eval contains the full model description,
+            #so it should have 11+N parameters where N is the number of jargs
+            #M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e + jargs
+            #f and e are not used in image computation, so slice around them for now
+            imparams = to_eval[:9] + [to_eval[11:]]
+            ivec, qvec, uvec, rotimxvec, rotimyvec = self.compute_image(imparams)
+            out = 0.
+            if 'vis' in data_types:
+                sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
+                model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
+                vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
+                out+=vislike
+            if 'logcamp' in data_types:
+                model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
+                logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
+                out += logcamplike
+            if 'cphase' in data_types:
+                model_cphase = self.cphase(ivec, rotimxvec, rotimyvec, cphaseu1, cphaseu2, cphaseu3, cphasev1, cphasev2, cphasev3)
+                cphaselike = -2/Ncphase * np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
+                out += cphaselike
+            return out
+        print("Built likelihood function!")
+        return loglike
+
+    def build_prior_transform(self):
+        functions = [get_uniform_transform(bounds[0],bounds[1]) for bounds in self.modeled_params]
+
+        def ptform(hypercube):
+            scaledcube = np.copy(hypercube)
+            for i in range(len(scaledcube)):
+                scaledcube[i] = functions[i](scaledcube[i])
+            return scaledcube
+        return ptform
+
+        
+
+
+
+
+
+
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87'):
+        """
+        Returns an ehtim Image object corresponding to the Blimage n0 emission
+        """
+
+        if self.mode == 'model':
+            print("Cannot directly make images in model mode! Call sample_blimage or MAP_blimage and display that!")
+            return
+
+        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
+        im.ivec = self.ivec
+        im.qvec = self.qvec
+        im.uvec = self.uvec
+
+        im = im.rotate(self.PA)
+        # im.ivec *= self.tf / im.total_flux()
+        return im
+
 
     # def logcamp_chisq(self,obs):
     #     if self.mode != 'fixed':
@@ -361,253 +480,6 @@ class Bam:
 
 
 
-
-
-
-
-
-
-
-    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87'):
-        """
-        Returns an ehtim Image object corresponding to the Blimage n0 emission
-        """
-
-        if self.mode == 'model':
-            print("Cannot directly make images in model mode! Call sample_blimage or MAP_blimage and display that!")
-            return
-
-        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
-        im.ivec = self.ivec
-        im.qvec = self.qvec
-        im.uvec = self.uvec
-
-        im = im.rotate(self.PA)
-        # im.ivec *= self.tf / im.total_flux()
-        return im
-
-    def MAP_Bam(self):
-        ME = self.MAP_estimate
-        if isiterable(self.M):
-            M_new = float(ME['M'])
-        else:
-            M_new = self.M
-        # self.
-        if isiterable(self.D):
-            D_new = float(ME['D'])
-        else:
-            D_new = self.D
-
-        if isiterable(self.inc):
-            inc_new = float(ME['inc'])
-        else:
-            inc_new = self.inc
-
-        if isiterable(self.zbl):
-            zbl_new = float(ME['zbl'])
-        else:
-            zbl_new = self.zbl
-
-        if isiterable(self.PA):
-            PA_new = float(ME['PA'])
-        else:
-            PA_new = self.PA
-
-        if isiterable(self.beta):
-            beta_new = float(ME['beta'])
-        else:
-            beta_new = self.beta
-
-        if isiterable(self.chi):
-            chi_new = float(ME['chi'])
-        else:
-            chi_new = self.chi
-
-        if isiterable(self.spec):
-            spec_new = float(ME['spec'])
-        else:
-            spec_new = self.spec
-
-        if isiterable(self.thetabz):
-            thetabz_new = float(ME['thetabz'])
-        else:
-            thetabz_new = self.thetabz
-
-        if isiterable(self.f):
-            f_new = float(ME['f'])
-        else:
-            f_new = self.f
-
-        if isiterable(self.e):
-            e_new = float(ME['e'])
-        else:
-            e_new = self.e
-
-        # jarg_names = self.jarg_names
-
-        # for jargi in range(len(self.jargs)):
-        #     jarg = jargs[jargi]
-        #     if isiterable(jarg):
-        #         jargs.append(pm.Uniform(jarg_names[jargi],lower=jarg[0],upper=jarg[1]))
-        #     else:
-        #         jargs.append(jarg)
-       
-
-
-        new_blimage = Blimage(self.r_lims, self.phi_lims, self.nr, self.nphi, M_new, D_new, inc_new, 0, zbl_new, PA=PA_new, beta=beta_new, chi=chi_new, spec=spec_new, nmax = self.nmax,e=e_new,f=f_new)
-  
-        
-        if isiterable(self.j):
-            new_blixels = ME['blixels']
-        else:
-            new_blixels = self.blixels.copy()
-
-        new_blimage.blixels = new_blixels
-        return new_blimage
-
-
-    def random_sample_blimage(self):
-        ME = self.trace[int(round(random.random()*len(self.trace)))]
-        if isiterable(self.M):
-            M_new = float(ME['M'])
-        else:
-            M_new = self.M
-        # self.
-        if isiterable(self.D):
-            D_new = float(ME['D'])
-        else:
-            D_new = self.D
-
-        if isiterable(self.inc):
-            inc_new = float(ME['inc'])
-        else:
-            inc_new = self.inc
-
-        if isiterable(self.zbl):
-            zbl_new = float(ME['zbl'])
-        else:
-            zbl_new = self.zbl
-
-        if isiterable(self.PA):
-            PA_new = float(ME['PA'])
-        else:
-            PA_new = self.PA
-
-        if isiterable(self.beta):
-            beta_new = float(ME['beta'])
-        else:
-            beta_new = self.beta
-
-        if isiterable(self.chi):
-            chi_new = float(ME['chi'])
-        else:
-            chi_new = self.chi
-
-        if isiterable(self.spec):
-            spec_new = float(ME['spec'])
-        else:
-            spec_new = self.spec
-
-        if isiterable(self.f):
-            f_new = float(ME['f'])
-        else:
-            f_new = self.f
-
-        if isiterable(self.e):
-            e_new = float(ME['e'])
-        else:
-            e_new = self.e
-
-        #make a new blimage with zero emissivity but same dimensions
-        new_blimage = Blimage(self.r_lims, self.phi_lims, self.nr, self.nphi, M_new, D_new, inc_new, 0, zbl_new, PA=PA_new, beta=beta_new, chi=chi_new, spec=spec_new, nmax = self.nmax, f= f_new, e=e_new)
-        #now go through and reset its blixels
-        # r = np.sqrt(np.linspace(self.r_lims[0]**2, self.r_lims[1]**2, self.nr+1)[:-1])
-        # phi = np.linspace(self.phi_lims[0],self.phi_lims[1], self.nphi+1)[:-1]
-        # new_blixels = []
-        # r_grid, phi_grid = np.meshgrid(r,phi)
-        # rvec = r_grid.flatten()
-        # phivec = phi_grid.flatten()
-        
-        if isiterable(self.j):
-            # name = 'j_r'+str(r_index)+'_phi'+str(phi_index)
-            new_blixels = ME['blixels']
-            # append(Blixel(rval, phival, float(ME[name]), M_new, D_new, inc_new, mode='fixed'))
-        else:
-            new_blixels = self.blixels.copy()
-
-        new_blimage.blixels = new_blixels
-        return new_blimage
-
-
-    def save_blimage(self,blimage_name):
-        """
-        Saves blimage parameters as a pickled dictionary.
-        """
-        out = dict()
-        out['r_lims'] = self.r_lims
-        out['phi_lims'] = self.phi_lims
-        out['nr'] = self.nr
-        out['nphi'] = self.nphi
-        out['M'] = self.M
-        out['D'] = self.D
-        out['inc'] = self.inc
-        if isiterable(self.j):
-            out['j'] = self.j
-        else:
-            out['j'] = -1
-            out['blixels'] = self.blixels
-        out['PA'] = self.PA
-        out['beta'] = self.beta
-        out['chi'] = self.chi
-        out['spec'] = self.spec
-        out['f'] = self.f
-        out['e'] = self.e
-        out['nmax'] = self.nmax
-        out['zbl'] = self.zbl
-        with open(blimage_name, 'wb') as file:
-            pkl.dump(out, file)
-
-        
-    def plot_raw_posterior(self, var_names = None, kind='hist'):
-        """
-        Thin wrapper around the pymc3 plot_posterior method.
-        """
-        pm.plot_posterior(self.trace, var_names = var_names, kind=kind)
-
-    # def plot_scaled_singlevar_posterior(self, var_name, scale=1., title='', units= '',save=False):
-    #     """
-    #     Applies unit scaling to a posterior before plotting.
-    #     """
-    #     plot_custom_singlevar_posterior(self.trace, var_name, scale=scale, title=title, units= units, save=save)
-
-    def save_trace(self, directory='./traces/',overwrite=False):
-        """
-        Saves self.trace to the specified directory
-        """
-        pm.save_trace(self.trace, directory = directory, overwrite=overwrite)
-
-    def load_trace(self,directory):
-        """
-        Loads a trace, and saves it to the trace attribute (for resuming sampling).
-        """
-        if mode != 'model':
-            print("Can't load trace into fixed blimage!")
-            return
-        with self.model:
-            self.trace = pm.load_trace(directory=directory)
-
-
-
-    # def plot_MAP_frames(self, FOV, npix, t=[0.],save=False, out_dir = './', scale=1, units ='', clean_edges=False):
-    #     """
-    #     Plots the model with the given FOV divided over npix pixels at the specified frames.
-    #     """
-    #     plot_frames(self.image_func, self.MAP_values, FOV, npix, t=t,save=save, out_dir=out_dir, scale=scale, units=units,clean_edges=clean_edges)
-
-    # def ray_trace(self, FOV, npix, )
-
-
-
 def load_blimage(blimage_name):
     """
     Loads a dictionary of blimage parameters and returns the created blimage.
@@ -635,3 +507,4 @@ def load_blimage(blimage_name):
         new_blim.blixels = in_dict['blixels']
         new_blim.j = 0
     return new_blim
+

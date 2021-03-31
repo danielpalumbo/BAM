@@ -6,6 +6,8 @@ import random
 import pickle as pkl
 from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
+import dynesty
+from dynesty import plotting as dyplot
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # theano.config.exception_verbosity='high'
@@ -36,12 +38,12 @@ class Bam:
 
         self.fov = fov
         self.npix = npix
-        self.MAP_estimate = None
+        self.recent_sampler = None
+        self.recent_results = None
         # self.MAP_values = None
         self.jfunc = jfunc
         self.jarg_names = jarg_names
         self.jargs = jargs
-        self.trace = None
         self.M = M
         self.D = D
         self.inc = inc
@@ -291,10 +293,20 @@ class Bam:
         return visreal_model+1j*visimag_model
 
     def vis_fixed(self, u, v):
+        if self.mode=='model':
+            print("Can't compute fixed visibilities in model mode!")
+            return
         imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
         ivec, qvec, uvec, rotimxvec, rotimyvec = self.compute_image(imparams)
 
         return self.vis(ivec, rotimxvec, rotimyvec, u, v)
+
+    def observe_same(self, obs):
+        if self.mode=='model':
+            print("Can't observe_same in model mode!")
+            return
+        im = self.make_image(ra=obs.ra, dec=obs.dec, rf=obs.rf, mjd = obs.mjd, source=obs.source)
+        return im.observe_same(obs)
 
     def cphase(self, vec, rotimxvec, rotimyvec, u1, u2, u3, v1, v2, v3):
         
@@ -338,6 +350,7 @@ class Bam:
             u = obs.data['u']
             v = obs.data['v']
             Nvis = len(vis)
+            print("Building vis likelihood!")
         if 'logcamp' in data_types:
             logcamp_data = obs.c_amplitudes(ctype='logcamp')
             logcamp = logcamp_data['camp']
@@ -351,6 +364,7 @@ class Bam:
             campv3 = logcamp_data['v3']
             campv4 = logcamp_data['v4']
             Ncamp = len(logcamp)
+            print("Building logcamp likelihood!")
         if 'cphase' in data_types:
             cphase_data = obs.c_phases(ang_unit='rad')
             cphaseu1 = cphase_data['u1']
@@ -362,6 +376,7 @@ class Bam:
             cphase = cphase_data['cphase']
             cphase_sigma = cphase_data['sigmacp']
             Ncphase = len(cphase)
+            print("Building cphase likelihood!")
 
         def loglike(params):
             to_eval = []
@@ -391,7 +406,7 @@ class Bam:
                 cphaselike = -2/Ncphase * np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
                 out += cphaselike
             return out
-        print("Built likelihood function!")
+        print("Built combined likelihood function!")
         return loglike
 
     def build_prior_transform(self):
@@ -404,10 +419,47 @@ class Bam:
             return scaledcube
         return ptform
 
+    
+    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi'):
         
+        if dynamic:
+            sampler = dynesty.DynamicNestedSampler(loglike, ptform,model)
+        else:
+            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive)
+        return sampler
+
+    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi'):
+        ptform = self.build_prior_transform()
+        loglike = self.build_likelihood(obs, data_types=data_types)
+        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)
+
+        self.recent_sampler = sampler
+        print("Ready to model with this BAM's recent_sampler! Call run_nested!")
+
+    def run_nested(self):
+        self.recent_sampler.run_nested()
+        self.recent_results = self.recent_sampler.results
+        return self.recent_results
+
+    def runplot(self, save=''):
+        fig, axes = dyplot.runplot(results)
+        if len(save)>0:
+            plt.savefig(save,bbox_inches='tight')
+        plt.show()
 
 
+    def traceplot(self, save=''):
+        fig, axes = dyplot.traceplot(results)
+        if len(save)>0:
+            plt.savefig(save,bbox_inches='tight')
+        plt.show()
 
+
+    def cornerplot(self, save=''):
+        fig, axes = dyplot.cornerplot(results)
+        if len(save)>0:
+            plt.savefig(save,bbox_inches='tight')
+        plt.show()
 
 
 
@@ -419,15 +471,17 @@ class Bam:
         if self.mode == 'model':
             print("Cannot directly make images in model mode! Call sample_blimage or MAP_blimage and display that!")
             return
-
+        imparams = self.all_params[:9] + [self.all_params[11:]]
+        ivec, qvec, uvec, rotimxvec, rotimyvec = self.compute_image(imparams)
         im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
-        im.ivec = self.ivec
-        im.qvec = self.qvec
-        im.uvec = self.uvec
+        im.ivec = ivec
+        im.qvec = qvec
+        im.uvec = uvec
 
         im = im.rotate(self.PA)
         # im.ivec *= self.tf / im.total_flux()
         return im
+
 
 
     # def logcamp_chisq(self,obs):

@@ -420,18 +420,18 @@ class Bam:
         return ptform
 
     
-    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi'):
+    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi', pool=None):
         
         if dynamic:
             sampler = dynesty.DynamicNestedSampler(loglike, ptform,model)
         else:
-            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive)
+            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, pool=pool)
         return sampler
 
-    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi'):
+    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', pool=None):
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types)
-        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)
+        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound, pool=pool)
 
         self.recent_sampler = sampler
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
@@ -442,21 +442,21 @@ class Bam:
         return self.recent_results
 
     def runplot(self, save=''):
-        fig, axes = dyplot.runplot(results)
+        fig, axes = dyplot.runplot(self.recent_results)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
         plt.show()
 
 
     def traceplot(self, save=''):
-        fig, axes = dyplot.traceplot(results)
+        fig, axes = dyplot.traceplot(self.recent_results)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
         plt.show()
 
 
     def cornerplot(self, save=''):
-        fig, axes = dyplot.cornerplot(results)
+        fig, axes = dyplot.cornerplot(self.recent_results)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
         plt.show()

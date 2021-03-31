@@ -420,18 +420,18 @@ class Bam:
         return ptform
 
     
-    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi', pool=None):
+    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi'):#, pool=None, queue_size=None):
         
         if dynamic:
-            sampler = dynesty.DynamicNestedSampler(loglike, ptform,model)
+            sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive)#, pool=pool, queue_size=queue_size)
         else:
-            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, pool=pool)
+            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive)#, pool=pool, queue_size=queue_size)
         return sampler
 
-    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', pool=None):
+    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi'):#, pool=None, queue_size=None):
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types)
-        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound, pool=pool)
+        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)#, pool=pool, queue_size=queue_size)
 
         self.recent_sampler = sampler
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")

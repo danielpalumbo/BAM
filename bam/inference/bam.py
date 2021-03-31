@@ -99,7 +99,7 @@ class Bam:
         for i in ['PA','chi']:
             if i in self.modeled_names:
                 bounds = self.modeled_params[self.modeled_names.index(i)]
-                if np.isclose(np.exp(1j*bounds[0]),np.exp(1j*bounds(bounds[1])),rtol=1e-12):
+                if np.isclose(np.exp(1j*bounds[0]),np.exp(1j*bounds[1]),rtol=1e-12):
                     print("Found periodic prior on "+str(i))
                     self.periodic_names.append(i)
                     self.periodic_indices.append(self.modeled_names.index(i))

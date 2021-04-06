@@ -8,10 +8,12 @@ from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
 from dynesty import plotting as dyplot
+from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # theano.config.exception_verbosity='high'
 # theano.config.compute_test_value = 'ignore'
+
 
 def example_jfunc(r, phi, jargs):
     peak_r = jargs[0]
@@ -26,7 +28,88 @@ def example_jfunc(r, phi, jargs):
 def get_uniform_transform(lower, upper):
     return lambda x: (upper-lower)*x + lower
 
+def beloborodov_r(psi, b):
+    psi = np.complex128(psi)
+    b = np.complex128(b)
+    return np.sqrt((1-np.cos(psi)**2)/(1+np.cos(psi)**2) + b**2 / np.sin(psi)**2)-(1-np.cos(psi))/(1+np.cos(psi))
 
+def getrt(rho):
+    rho = np.complex128(rho)
+    det = (-9*rho**2 + np.sqrt(3)*np.sqrt(27*rho**4 - (2+0j) * rho**6))**(1/3)
+    rt = 2.**(2/3)*rho**2 / (3**(1/3)*det) + 2.**(1/3)*det / 3**(2/3)
+    return rt
+
+def getpsit(rt):
+    rt = np.complex128(rt)
+    return np.arccos(-2 / (rt-2))
+#psit - np.abs(psit-psivecs[n))
+def betterborodov_v1(rho, varphi, inc, nmax):
+    """
+    Given rho and varphi vecs, inclination, and nmax,
+    compute r and phi vecs for each n
+    """
+    phivecs = [getphi(varphi, inc, n).real for n in range(nmax+1)]
+    rt = getrt(rho)
+    psit = getpsit(rt)
+    psivecs = [getpsin(inc, phivecs[n], n) for n in range(nmax+1)]
+    rvecs = [beloborodov_r(psit - np.sqrt((psit-psivecs[n])**2), rho).real for n in range(nmax+1)]
+    
+    signprvecs = [(np.abs(psivecs[n])<psit).astype(int) for n in range(nmax+1)]
+    for n in range(nmax+1):
+        signprvecs[n][np.abs(psivecs[n])<psit] = -1
+        signprvecs[n][rho <= np.sqrt(27)] = 1
+    arctannumvecs = [np.arctan(1/np.sqrt(rvecs[n]**2 / rho**2 / (1-2/rvecs[n])-1)) for n in range(nmax+1)]
+    alphavecs = [np.sign(psivecs[n]) * (np.pi-arctannumvecs[n]) for n in range(nmax+1)]
+    for n in range(nmax+1):
+        mask = (signprvecs[n]==1)*(0<psivecs[n])*(psivecs[n]<np.pi)
+        alphavecs[n][mask] = (np.sign(psivecs[n])*arctannumvecs[n])[mask]
+
+    return rvecs, phivecs, psivecs, alphavecs
+
+def beloborodov(rho, varphi, inc, nmax):
+
+    phivec = arctan2(sin(varphi),cos(varphi)*cos(inc))
+
+    sinprod = sin(inc)*sin(phivec)
+    numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
+    denomenator = (-1.+sinprod)**2 * (1+sinprod)
+    sqq = sqrt(numerator/denomenator)
+    rvec = np.maximum((1.-sqq + sinprod*(1.+sqq))/(sinprod-1.),2.+1.e-5)
+    cospsi = -sinprod#sin(inc) * sin(phivec)
+    psivec = np.arccos(cospsi)
+    # sinpsi = sqrt(1. - cospsi**2)
+    cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
+    # sinalpha =sqrt(1. - cosalpha**2)
+    alphavec = np.arccos(cosalpha)
+    rvecs = [rvec]
+    phivecs = [phivec]
+    alphavecs = [alphavec]
+    psivecs = [psivec]
+    return rvecs, phivecs, psivecs, alphavecs
+
+# def getsignpr(b, r, theta, psin):
+#     # if b <= np.sqrt(27):
+#     #     return 1
+#     psit = getpsit(b, theta)
+#     out = (np.abs(psin) < psit).astype(int)
+#     out[np.abs(psin)<psit] = -1
+#     out[b <= np.sqrt(27)]=1
+#     return out
+
+# #now compute alpha_n
+# def approxalphan(b, r, theta, psin):
+#     signpr = getsignpr(b, r, theta, psin)
+#     arctannum = np.arctan(1 / np.sqrt(r**2/b**2/(1-2/r)-1))
+#     signpsin = np.sign(psin)
+#     out = signpsin * (np.pi-arctannum)
+#     mask = (signpr == 1)*(0<psin)*(psin<np.pi)
+#     out[mask] = (signpsin*arctannum)[mask]
+#     return out
+# rho = np.linspace(0,10,100)
+# varphi = np.zeros_like(rho)
+# rvecs, phivecs = betterborodov_v1(rho, varphi, 0, 0)
+# plt.plot(rho, rvecs[0])
+# plt.show()
 
 class Bam:
     '''The Bam class is a collection of accretion flow and black hole parameters.
@@ -34,8 +117,8 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx'):
-
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='belo'):
+        self.approxtype = approxtype
         self.fov = fov
         self.npix = npix
         self.recent_sampler = None
@@ -111,6 +194,13 @@ class Bam:
         print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)  
         
 
+    def test(self, i):
+        if len(i) == self.npix**2:
+            i = i.reshape((self.npix, self.npix))
+        plt.imshow(i)
+        plt.colorbar()
+        plt.show()
+
     def compute_image(self, imparams):
         """
         Given a list of values of modeled parameters in imparams,
@@ -121,64 +211,103 @@ class Bam:
         # self.M = M
         #this is the end of the problem setup;
         #everything after this point should bifurcate depending on calctype
+
+         # def rho_conv(r, phi, D, theta0, r_g):
+        #     rho2 = (((r/D)**2.0)*(1.0 - ((sin(theta0)**2.0)*(sin(phi)**2.0)))) + ((2.0*r*r_g/(D**2.0))*((1.0 + (sin(theta0)*sin(phi)))**2.0))
+        #     rho = sqrt(rho2)
+        #     return rho
+
+        # def emission_coordinates(rho, varphi):
+        #convert mudists to gravitational units
+        rhovec = D / (M*Gpercsq) * self.MUDISTS
+        
+
         if self.calctype == 'approx':
 
-             # def rho_conv(r, phi, D, theta0, r_g):
-            #     rho2 = (((r/D)**2.0)*(1.0 - ((sin(theta0)**2.0)*(sin(phi)**2.0)))) + ((2.0*r*r_g/(D**2.0))*((1.0 + (sin(theta0)*sin(phi)))**2.0))
-            #     rho = sqrt(rho2)
-            #     return rho
-
-            # def emission_coordinates(rho, varphi):
-                
-
-
-            #convert mudists to gravitational units
-            rho = D / (M*Gpercsq) * self.MUDISTS
-            
-
-            phivec = arctan2(sin(self.varphivec),cos(self.varphivec)*cos(inc))
-            sinprod = sin(inc)*sin(phivec)
-            numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
-            denomenator = (-1.+sinprod)**2 * (1+sinprod)
-            sqq = sqrt(numerator/denomenator)
-            rvec = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
-             
-
+            if self.approxtype == 'better':
+                rvecs, phivecs, psivecs, alphavecs = betterborodov_v1(rhovec, self.varphivec, inc, self.nmax)
+            elif self.approxtype == 'belo':
+                rvecs, phivecs, psivecs, alphavecs = beloborodov(rhovec, self.varphivec, inc, self.nmax)
             # rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
-            rvec = clip(rvec, 2.+1.e-5,np.inf)
-            # rvec = ((rvec-2)+sqrt((rvec-2)**2))/2.+2.0001
-            # rvec = maximum(rvec, 2.00001)
-            #begin Ramesh formalism
-            eta = chi+np.pi
-            beq = sin(thetabz)
-            bz = cos(thetabz)
-            br = beq*cos(eta)
-            bphi = beq*sin(eta)
-            coschi = cos(chi)
-            sinchi = sin(chi)
-            betax = beta*coschi
-            betay = beta*sinchi
-            bx = br
-            by = bphi
 
-            bmag = sqrt(bx**2 + by**2 + bz**2)
+        elif self.calctype == 'exact':
+            
+            rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
+            phivecs = [getphi(self.varphivec, inc, n) for n in range(self.nmax+1)]
+            psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
+            alphavecs = [getalphan(rhovec, rvecs[n], inc, psis[n]) for n in range(self.nmax+1)]
+            # cosalphas = [np.cos(alpha) for alpha in alphas]
+
+        eta = chi+np.pi
+        beq = sin(thetabz)
+        bz = cos(thetabz)
+        br = beq*cos(eta)
+        bphi = beq*sin(eta)
+        coschi = cos(chi)
+        sinchi = sin(chi)
+        betax = beta*coschi
+        betay = beta*sinchi
+        bx = br
+        by = bphi
+        bmag = sqrt(bx**2 + by**2 + bz**2)
+        sintheta = sin(inc)
+        # print(inc)
+        # print(sintheta)
+        costheta = cos(inc)    
+        #now do the rotation
+
+        rotimxvec = cos(PA)*self.imxvec - sin(PA)*self.imyvec
+        rotimyvec = sin(PA)*self.imxvec + cos(PA)*self.imyvec
+
+        ivecs = []
+        qvecs = []
+        uvecs = []        
+
+        for n in range(self.nmax+1):
+            rvec = np.maximum(rvecs[n],2.0001)
+            phivec = phivecs[n]
+            # print(phivec)
+            psivec = psivecs[n]
+            # print(psivec)
+            alphavec = alphavecs[n]
+            # print(alphavec)
+            cospsi = np.cos(psivec)
+            sinpsi = np.sin(psivec)
+            cosalpha = np.cos(alphavec)
+            sinalpha = np.sin(alphavec)
+            # if n == 1:
+            #     plt.imshow(rvec.reshape((self.npix, self.npix)))
+            #     plt.show()
+            # cosalpha = cosalphas[n]
+            # psi = psis[n]
+
             gfac = sqrt(1. - 2./rvec)
             gfacinv = 1. / gfac
             gamma = 1. / sqrt(1. - beta**2)
 
-            sintheta = sin(inc)
-            # print(inc)
-            # print(sintheta)
-            costheta = cos(inc)
             sinphi = sin(phivec)
             cosphi = cos(phivec)
 
-            cospsi = -sintheta * sinphi
-            sinpsi = sqrt(1. - cospsi**2)
+            # self.test(sinpsi)
 
-            cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
-            sinalpha =sqrt(1. - cosalpha**2)
 
+            # # cosalpha = np.cos(alpha)
+            # if self.calctype == 'exact':
+            #     psivec = psivecs[n]
+            #     cospsi = np.cos(psivec)
+            #     sinpsi = np.sin(psivec)
+            #     alpha = alphas[n]
+            #     cosalpha = np.cos(alpha)
+            #     sinalpha = np.sin(alpha)
+            # else:                    
+            #     psivec = psivecs[n]
+            #     cospsi = np.cos(psivec)
+            #     sinpsi = np.sin(psivec)
+            #     # cospsi = -sintheta * sinphi
+            #     # sinpsi = sqrt(1. - cospsi**2)
+            #     cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
+            #     sinalpha =sqrt(1. - cosalpha**2)
+                
             
             sinxi = sintheta * cosphi / sinpsi
             cosxi = costheta / sinpsi
@@ -202,7 +331,7 @@ class Bam:
 
             # polfac = np.sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
             sinzeta = sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
-
+            # self.test(sinzeta)
             profile = self.jfunc(rvec, phivec, jargs)
             # profile=1.
             # 
@@ -219,6 +348,8 @@ class Bam:
             pathlength = kFthat/kFzhat
             mag = polarizedintensity*pathlength
             
+            # self.test(bmag)
+            # self.test(kFthat)
 
             fFthat = 0.
             fFxhat = kcrossbx / (kFthat * bmag)
@@ -246,6 +377,8 @@ class Bam:
             k2 = -rvec * (kPphat * fPthhat - kPthhat * fPphat)
                 
             kOlp = rvec * kPphat
+
+
             radicand = kPthhat**2 - kPphat**2 * costheta**2 / sintheta**2
             radicand = np.maximum(radicand,0.)
             # due to machine precision, some small negative values are present. We clip these here.
@@ -266,19 +399,21 @@ class Bam:
 
             qvec = -mag*(ealpha**2 - ebeta**2)
             uvec = -mag*(2*ealpha*ebeta)
+            qvec[np.isnan(qvec)]=0
+            uvec[np.isnan(uvec)]=0
             ivec = sqrt(qvec**2 + uvec**2)
-
-            tf = np.sum(ivec)
-            qvec = qvec * zbl/tf
-            uvec = uvec * zbl/tf
-            ivec = ivec * zbl/tf
-            #now do the rotation
-
-            rotimxvec = cos(PA)*self.imxvec - sin(PA)*self.imyvec
-            rotimyvec = sin(PA)*self.imxvec + cos(PA)*self.imyvec
-            return ivec, qvec, uvec, rotimxvec, rotimyvec
-        else:
-            pass
+            qvecs.append(qvec)
+            uvecs.append(uvec)
+            ivecs.append(ivec)
+            # tf = np.sum(ivec)
+            # qvec = qvec * zbl/tf
+            # uvec = uvec * zbl/tf
+            # ivec = ivec * zbl/tf
+        tf = np.sum(ivecs)
+        ivecs = [ivec*zbl/tf for ivec in ivecs]
+        qvecs = [qvec*zbl/tf for qvec in qvecs]
+        uvecs = [uvec*zbl/tf for uvec in uvecs]
+        return ivecs, qvecs, uvecs, rotimxvec, rotimyvec
 
     def vis(self, vec, rotimxvec, rotimyvec, u, v):#, vis_types=list('i')):
 
@@ -297,8 +432,10 @@ class Bam:
             print("Can't compute fixed visibilities in model mode!")
             return
         imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
-        ivec, qvec, uvec, rotimxvec, rotimyvec = self.compute_image(imparams)
-
+        ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
+        ivec = np.sum(ivecs, axis=0)
+        qvec = np.sum(qvecs, axis=0)
+        uvec = np.sum(uvecs, axis=0)
         return self.vis(ivec, rotimxvec, rotimyvec, u, v)
 
     def observe_same(self, obs):
@@ -390,8 +527,11 @@ class Bam:
             #M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e + jargs
             #f and e are not used in image computation, so slice around them for now
             imparams = to_eval[:9] + [to_eval[11:]]
-            ivec, qvec, uvec, rotimxvec, rotimyvec = self.compute_image(imparams)
+            ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
             out = 0.
+            ivec = np.sum(ivecs,axis=0)
+            qvec = np.sum(qvecs,axis=0)
+            uvec = np.sum(uvecs,axis=0)
             if 'vis' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
                 model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
@@ -463,7 +603,7 @@ class Bam:
 
 
 
-    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87'):
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87',n='all'):
         """
         Returns an ehtim Image object corresponding to the Blimage n0 emission
         """
@@ -472,7 +612,16 @@ class Bam:
             print("Cannot directly make images in model mode! Call sample_blimage or MAP_blimage and display that!")
             return
         imparams = self.all_params[:9] + [self.all_params[11:]]
-        ivec, qvec, uvec, rotimxvec, rotimyvec = self.compute_image(imparams)
+        ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
+        if n =='all':
+            ivec = np.sum(ivecs,axis=0)
+            qvec = np.sum(qvecs,axis=0)
+            uvec = np.sum(uvecs,axis=0)
+        elif type(n) is int:
+            ivec = ivecs[n]
+            qvec = qvecs[n]
+            uvec = uvecs[n]
+
         im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
         im.ivec = ivec
         im.qvec = qvec

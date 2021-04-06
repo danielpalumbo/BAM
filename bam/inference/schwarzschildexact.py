@@ -15,12 +15,20 @@ ef = np.frompyfunc(mp.ellipf, 2, 1)
 def getvarphi(blphi, theta, n):
     return (np.arctan2(np.sin(blphi)*np.cos(theta), np.cos(blphi)) + n * np.pi)
 
+#get BL phi from varphi
+def getphi(varphi, theta, n):
+    return (np.arctan2(np.sin(varphi),np.cos(varphi)*np.cos(theta))+n*np.pi)
+
 #compute mino time gtheta
 def gettau(b, varphi, n, theta):
     if theta==0:
         return ((2 * n + 1) / b * np.pi / 2)
-    m = n if np.sin(varphi)<0 else n+1
-    sinphi = 1 if np.sin(varphi) >= 0 else -1 #just need to be consistent about defining sinvarphi\geq 0 together
+    m = n*np.ones_like(varphi)
+    m[np.sin(varphi)>0] = n+1
+    # m = n if np.sin(varphi)<0 else n+1
+    sinphi = np.ones_like(varphi)
+    sinphi[np.sin(varphi)<0] = -1
+    # sinphi = 1 if np.sin(varphi) >= 0 else -1 #just need to be consistent about defining sinvarphi\geq 0 together
     return 1/b * (np.pi * m - sinphi*np.arcsin(np.cos(theta) / np.sqrt(np.cos(theta)**2 * np.cos(varphi)**2 + np.sin(varphi)**2)))
 
 
@@ -133,6 +141,9 @@ def getpsit(b, theta):
     psit = np.abs(prefac * np.complex128(ef(x2, k)))
     return psit
 
+
+
+
 #next, need sign(p^r) at the emission radius to determine if ray hits turning point
 def getsignpr(b, r, theta, psin):
     # if b <= np.sqrt(27):
@@ -169,22 +180,22 @@ def getwindangle(b, r, blphi, theta, n):
     psin = getpsin(theta, blphi, n)
     alphan = getalphan(b, r, theta, psin)
     return (psin - alphan)
-def main():
-    global listerr;
-    listerr=[]
+# def main():
+#     global listerr;
+#     listerr=[]
 
-    theta = 89*np.pi/180
-    rvals = np.arange(2.8, 3.5, .01)
-    varphi = -np.pi/2
-    n = 1
-#    blphivals = np.linspace(0, 2*np.pi, 50)
-    varphivals = getvarphi(blphivals, theta, n)
-    bvals = findb
-#    bvals = np.array([getscreencoords(r, blphi, theta, n)[0] for blphi in blphivals])
-    psinvals = [getpsin(theta, blphi, n) for blphi in blphivals]
-    signvals = [getsignpr(bvals[i], r, theta, psinvals[i]) for i in range(len(blphivals))]
-    for i in range(len(signvals)):
-        print('varphi: {}, sign: {}'.format(np.sin(varphivals[i]), signvals[i]))
+#     theta = 89*np.pi/180
+#     rvals = np.arange(2.8, 3.5, .01)
+#     varphi = -np.pi/2
+#     n = 1
+# #    blphivals = np.linspace(0, 2*np.pi, 50)
+#     varphivals = getvarphi(blphivals, theta, n)
+#     bvals = findb
+# #    bvals = np.array([getscreencoords(r, blphi, theta, n)[0] for blphi in blphivals])
+#     psinvals = [getpsin(theta, blphi, n) for blphi in blphivals]
+#     signvals = [getsignpr(bvals[i], r, theta, psinvals[i]) for i in range(len(blphivals))]
+#     for i in range(len(signvals)):
+#         print('varphi: {}, sign: {}'.format(np.sin(varphivals[i]), signvals[i]))
 
-if __name__=="__main__":
-    main()
+# if __name__=="__main__":
+#     main()

@@ -8,6 +8,7 @@ from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
 from dynesty import plotting as dyplot
+from dynesty import utils as dyfunc
 from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
@@ -581,27 +582,50 @@ class Bam:
         self.recent_results = self.recent_sampler.results
         return self.recent_results
 
-    def runplot(self, save=''):
+        
+    def runplot(self, save='', show=True):
         fig, axes = dyplot.runplot(self.recent_results)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            plt.close('all')
 
 
-    def traceplot(self, save=''):
-        fig, axes = dyplot.traceplot(self.recent_results)
+    def traceplot(self, save='', show=True):
+        fig, axes = dyplot.traceplot(self.recent_results, labels=self.modeled_names)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            plt.close('all')
 
 
-    def cornerplot(self, save=''):
+    def cornerplot(self, save='',show=True):
         fig, axes = dyplot.cornerplot(self.recent_results, labels=self.modeled_names)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            plt.close('all')
 
+    def mean_and_cov(self):
+        samples = self.recent_results.samples
+        weights = np.exp(self.recent_results.logwt - self.recent_results.logz[-1])
+        return dyfunc.mean_and_cov(samples, weights)
 
+    def MOP_Bam(self):
+        mean, cov = self.mean_and_cov()
+        to_eval = []
+        for name in self.all_names:
+            if not(name in self.modeled_names):
+                to_eval.append(self.all_params[self.all_names.index(name)])
+            else:
+                to_eval.append(mean[self.modeled_names.index(name)])
+        return Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale)
 
     def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87',n='all'):
         """

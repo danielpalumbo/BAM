@@ -117,7 +117,7 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='belo'):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='belo', Mscale = 2.e30*1.e9):
         self.approxtype = approxtype
         self.fov = fov
         self.npix = npix
@@ -141,7 +141,7 @@ class Bam:
         self.zbl = zbl
         self.calctype = calctype
         self.rho_c = np.sqrt(27)
-
+        self.Mscale = Mscale
         pxi = (np.arange(npix)-0.01)/npix-0.5
         pxj = np.arange(npix)/npix-0.5
         # get angles measured north of west
@@ -219,7 +219,7 @@ class Bam:
 
         # def emission_coordinates(rho, varphi):
         #convert mudists to gravitational units
-        rhovec = D / (M*Gpercsq) * self.MUDISTS
+        rhovec = D / (M*self.Mscale*Gpercsq) * self.MUDISTS
         
 
         if self.calctype == 'approx':
@@ -596,7 +596,7 @@ class Bam:
 
 
     def cornerplot(self, save=''):
-        fig, axes = dyplot.cornerplot(self.recent_results)
+        fig, axes = dyplot.cornerplot(self.recent_results, labels=self.modeled_names)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
         plt.show()

@@ -423,7 +423,7 @@ class Bam:
 
         matrix = np.outer(u, rotimxvec)+np.outer(v, rotimyvec)
         A_real = np.cos(2.0*np.pi*matrix)
-        A_imag = np.sin(2.0*np.pi*matrix)
+        A_imag = -np.sin(2.0*np.pi*matrix)
         visreal_model = np.dot(A_real,vec)
         visimag_model = np.dot(A_imag,vec)
         return visreal_model+1j*visimag_model

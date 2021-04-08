@@ -256,10 +256,12 @@ class Bam:
         # print(sintheta)
         costheta = cos(inc)    
         #now do the rotation
-
-        rotimxvec = cos(PA)*self.imxvec - sin(PA)*self.imyvec
-        rotimyvec = sin(PA)*self.imxvec + cos(PA)*self.imyvec
-
+        #note that this is essentially an inverse mapping, saying where
+        #previously unrotated points can be found on the new image, after rotation
+        #hence, the minus sign
+        rotimxvec = cos(-PA)*self.imxvec - sin(-PA)*self.imyvec
+        rotimyvec = sin(-PA)*self.imxvec + cos(-PA)*self.imyvec
+        # self.test(rotimxvec)
         ivecs = []
         qvecs = []
         uvecs = []        
@@ -423,7 +425,7 @@ class Bam:
 
         matrix = np.outer(u, rotimxvec)+np.outer(v, rotimyvec)
         A_real = np.cos(2.0*np.pi*matrix)
-        A_imag = -np.sin(2.0*np.pi*matrix)
+        A_imag = np.sin(2.0*np.pi*matrix)
         visreal_model = np.dot(A_real,vec)
         visimag_model = np.dot(A_imag,vec)
         return visreal_model+1j*visimag_model

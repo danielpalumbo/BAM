@@ -267,7 +267,8 @@ class Bam:
         uvecs = []        
 
         for n in range(self.nmax+1):
-            rvec = np.maximum(rvecs[n],2.0001)
+            # rvec = np.maximum(rvecs[n],2.0001)
+            rvec = rvecs[n]
             phivec = phivecs[n]
             # print(phivec)
             psivec = psivecs[n]
@@ -627,6 +628,24 @@ class Bam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(mean[self.modeled_names.index(name)])
+        return Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale)
+
+    def resample_equal(self):
+        samples = self.recent_results.samples
+        weights = np.exp(self.recent_results.logwt - self.recent_results.logz[-1])
+        resampled = dyfunc.resample_equal(samples,weights)
+        return resampled
+
+    def random_sample_Bam(self, samples=None, weights=None):
+        if samples == None:
+            samples = self.resample_equal()
+        sample = samples[random.randint(0,len(samples)-1)]
+        to_eval = []
+        for name in self.all_names:
+            if not(name in self.modeled_names):
+                to_eval.append(self.all_params[self.all_names.index(name)])
+            else:
+                to_eval.append(sample[self.modeled_names.index(name)])
         return Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale)
 
     def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87',n='all'):

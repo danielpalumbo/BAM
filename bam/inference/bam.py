@@ -191,8 +191,16 @@ class Bam:
         # self.periodic_names = [i for i in ['PA','chi'] if i in self.modeled_names]
         # self.periodic_indices = [self.modeled_names.index(i) for i in self.periodic_names]
 
+        if self.mode == 'fixed':
+            print("Fixed Bam: precomputing all subimages.")
+            self.imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
+            self.ivecs, self.qvecs, self.uvecs, self.rotimxvec, self.rotimyvec = self.compute_image(self.imparams)
+            # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
 
-        print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)  
+        print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)
+
+        if self.calctype == 'approx':  
+            print("Using approxtype", approxtype)
         
 
     def test(self, i):
@@ -435,12 +443,12 @@ class Bam:
         if self.mode=='model':
             print("Can't compute fixed visibilities in model mode!")
             return
-        imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
-        ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
-        ivec = np.sum(ivecs, axis=0)
-        qvec = np.sum(qvecs, axis=0)
-        uvec = np.sum(uvecs, axis=0)
-        return self.vis(ivec, rotimxvec, rotimyvec, u, v)
+        # imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
+        # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
+        ivec = np.sum(self.ivecs, axis=0)
+        qvec = np.sum(self.qvecs, axis=0)
+        uvec = np.sum(self.uvecs, axis=0)
+        return self.vis(ivec, self.rotimxvec, self.rotimyvec, u, v)
 
     def observe_same(self, obs):
         if self.mode=='model':
@@ -474,7 +482,13 @@ class Bam:
         logcamp_model = np.log(amp12)+np.log(amp34)-np.log(amp23)-np.log(amp14)
         return logcamp_model
 
+    def logcamp_fixed(self, u1, u2, u3, u4, v1, v2, v3, v4):
+        ivec = np.sum(self.ivecs, axis=0)
+        return self.logcamp(ivec, self.rotimxvec, self.rotimyvec, u1, u2, u3, u4, v1, v2, v3, v4)
 
+    def cphase_fixed(self, u1, u2, u3, v1, v2, v3):
+        ivec = np.sum(self.ivecs, axis=0)
+        return self.cphase(ivec, self.rotimxvec, self.rotimyvec, u1, u2, u3, v1, v2, v3)
 
     def build_likelihood(self, obs, data_types=['vis']):
         """
@@ -664,16 +678,16 @@ class Bam:
         if self.mode == 'model':
             print("Cannot directly make images in model mode! Call sample_blimage or MAP_blimage and display that!")
             return
-        imparams = self.all_params[:9] + [self.all_params[11:]]
-        ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
+        # imparams = self.all_params[:9] + [self.all_params[11:]]
+        # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
         if n =='all':
-            ivec = np.sum(ivecs,axis=0)
-            qvec = np.sum(qvecs,axis=0)
-            uvec = np.sum(uvecs,axis=0)
+            ivec = np.sum(self.ivecs,axis=0)
+            qvec = np.sum(self.qvecs,axis=0)
+            uvec = np.sum(self.uvecs,axis=0)
         elif type(n) is int:
-            ivec = ivecs[n]
-            qvec = qvecs[n]
-            uvec = uvecs[n]
+            ivec = self.ivecs[n]
+            qvec = self.qvecs[n]
+            uvec = self.uvecs[n]
 
         im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
         im.ivec = ivec
@@ -686,53 +700,53 @@ class Bam:
 
 
 
-    # def logcamp_chisq(self,obs):
-    #     if self.mode != 'fixed':
-    #         print("Can only compute chisqs to fixed model!")
-    #         return
-    #     logcamp_data = obs.c_amplitudes(ctype='logcamp')
-    #     sigmaca = logcamp_data['sigmaca']
-    #     logcamp = logcamp_data['camp']
-    #     model_logcamps = self.logcamp(logcamp_data['u1'],logcamp_data['u2'],logcamp_data['u3'],logcamp_data['u4'],logcamp_data['v1'],logcamp_data['v2'],logcamp_data['v3'],logcamp_data['v4'])
-    #     logcamp_chisq = 1/len(sigmaca) * np.sum(np.abs((logcamp-model_logcamps)/sigmaca)**2)
-    #     return logcamp_chisq
+    def logcamp_chisq(self,obs):
+        if self.mode != 'fixed':
+            print("Can only compute chisqs to fixed model!")
+            return
+        logcamp_data = obs.c_amplitudes(ctype='logcamp')
+        sigmaca = logcamp_data['sigmaca']
+        logcamp = logcamp_data['camp']
+        model_logcamps = self.logcamp_fixed(logcamp_data['u1'],logcamp_data['u2'],logcamp_data['u3'],logcamp_data['u4'],logcamp_data['v1'],logcamp_data['v2'],logcamp_data['v3'],logcamp_data['v4'])
+        logcamp_chisq = 1/len(sigmaca) * np.sum(np.abs((logcamp-model_logcamps)/sigmaca)**2)
+        return logcamp_chisq
 
-    # def cphase_chisq(self,obs):
-    #     if self.mode != 'fixed':
-    #         print("Can only compute chisqs to fixed model!")
-    #         return
-    #     cphase_data = obs.c_phases(ang_unit='rad')
-    #     cphase = cphase_data['cphase']
-    #     sigmacp = cphase_data['sigmacp']
-    #     model_cphases = self.cphase(cphase_data['u1'],cphase_data['u2'],cphase_data['u3'],cphase_data['v1'],cphase_data['v2'],cphase_data['v3'])
-    #     cphase_chisq = (2.0/len(sigmacp)) * np.sum((1.0 - np.cos(cphase-model_cphases))/(sigmacp**2))
-    #     return cphase_chisq
+    def cphase_chisq(self,obs):
+        if self.mode != 'fixed':
+            print("Can only compute chisqs to fixed model!")
+            return
+        cphase_data = obs.c_phases(ang_unit='rad')
+        cphase = cphase_data['cphase']
+        sigmacp = cphase_data['sigmacp']
+        model_cphases = self.cphase_fixed(cphase_data['u1'],cphase_data['u2'],cphase_data['u3'],cphase_data['v1'],cphase_data['v2'],cphase_data['v3'])
+        cphase_chisq = (2.0/len(sigmacp)) * np.sum((1.0 - np.cos(cphase-model_cphases))/(sigmacp**2))
+        return cphase_chisq
 
-    # def vis_chisq(self,obs):
-    #     if self.mode !='fixed':
-    #         print("Can only compute chisqs to fixed model!")
-    #         return
+    def vis_chisq(self,obs):
+        if self.mode !='fixed':
+            print("Can only compute chisqs to fixed model!")
+            return
 
-    #     u = obs.data['u']
-    #     v = obs.data['v']
-    #     sigma = obs.data['sigma']  
-    #     amp = obs.unpack('amp')['amp']
-    #     vis = obs.data['vis']
-    #     sd = np.sqrt(sigma**2.0 + (self.sys_err*amp)**2.0 + self.abs_err**2.0)
+        u = obs.data['u']
+        v = obs.data['v']
+        sigma = obs.data['sigma']  
+        amp = obs.unpack('amp')['amp']
+        vis = obs.data['vis']
+        sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
 
-    #     model_vis = self.vis(u,v)
-    #     absdelta = np.abs(model_vis-vis)
-    #     vis_chisq = np.sum((absdelta/sd)**2)/(2*len(vis))
-    #     return vis_chisq
+        model_vis = self.vis_fixed(u,v)
+        absdelta = np.abs(model_vis-vis)
+        vis_chisq = np.sum((absdelta/sd)**2)/(2*len(vis))
+        return vis_chisq
 
-    # def all_chisqs(self, obs):
-    #     if self.mode !='fixed':
-    #         print("Can only compute chisqs to fixed model!")
-    #         return
-    #     logcamp_chisq = self.logcamp_chisq(obs)
-    #     cphase_chisq = self.cphase_chisq(obs)
-    #     vis_chisq = self.vis_chisq(obs)
-    #     return {'logcamp':logcamp_chisq,'cphase':cphase_chisq,'vis':vis_chisq}
+    def all_chisqs(self, obs):
+        if self.mode !='fixed':
+            print("Can only compute chisqs to fixed model!")
+            return
+        logcamp_chisq = self.logcamp_chisq(obs)
+        cphase_chisq = self.cphase_chisq(obs)
+        vis_chisq = self.vis_chisq(obs)
+        return {'logcamp':logcamp_chisq,'cphase':cphase_chisq,'vis':vis_chisq}
 
 
 

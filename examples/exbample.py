@@ -13,16 +13,30 @@ def example_fixed_jfunc(r, phi, jargs):
 
 
 fov = 80*eh.RADPERUAS
-npix = 40
+npix = 80
 jfunc = example_fixed_jfunc
 jarg_names = ['midr','thick']
-jargs = [6., 1.]
+jargs = [6., 5]
 M = 6.2 #in billions of solar masses now
 D = M87_dist
 inc = M87_inc
 zbl = 1.
 PA = 0.
-b = Bam(fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=PA)
+nmax = 1
+thetabz = np.pi/2
+chi = -np.pi/2
+beta = 0.5
+b = Bam(fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=PA, nmax = nmax, thetabz = thetabz, beta=beta, chi=chi)
+
+
+im = b.make_image()
+im.display()
+
+for n in range(nmax+1):
+	im = b.make_image(n=n)
+	im.display()
+
+
 # plt.imshow(b.ivec)#.reshape((80,80)))
 modelb = Bam(fov, npix, jfunc, jarg_names, jargs, M, D, inc, [0.5, 1.5], PA=PA)
 obs = eh.obsdata.load_uvfits('SR1_M87_2017_101_lo_hops_netcal_StokesI.uvfits')

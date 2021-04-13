@@ -44,6 +44,12 @@ def getpsit(rt):
     rt = np.complex128(rt)
     return np.arccos(-2 / (rt-2))
 #psit - np.abs(psit-psivecs[n))
+def test_better(rho, psi):
+    rt = getrt(rho)
+    psit = getpsit(rt)
+    rb1 = beloborodov_r(psit - np.sqrt((psit-psi)**2), rho)
+    return rb1
+
 def betterborodov_v1(rho, varphi, inc, nmax):
     """
     Given rho and varphi vecs, inclination, and nmax,
@@ -52,7 +58,9 @@ def betterborodov_v1(rho, varphi, inc, nmax):
     phivecs = [getphi(varphi, inc, n).real for n in range(nmax+1)]
     rt = getrt(rho)
     psit = getpsit(rt)
-    psivecs = [getpsin(inc, phivecs[n], n) for n in range(nmax+1)]
+    # psivecs = [getpsin(inc, phivecs[n], n) for n in range(nmax+1)]
+    psivec = getpsin(inc, phivecs[0], 0)
+    psivecs = [psivec]+[psivec + n*np.pi for n in range(1, nmax+1)]
     rvecs = [beloborodov_r(psit - np.sqrt((psit-psivecs[n])**2), rho).real for n in range(nmax+1)]
     
     signprvecs = [(np.abs(psivecs[n])<psit).astype(int) for n in range(nmax+1)]
@@ -68,24 +76,34 @@ def betterborodov_v1(rho, varphi, inc, nmax):
     return rvecs, phivecs, psivecs, alphavecs
 
 def beloborodov(rho, varphi, inc, nmax):
-
     phivec = arctan2(sin(varphi),cos(varphi)*cos(inc))
+    # getpsin(theta, blphi, n):
+    psivecs = [getpsin(inc, phivec, n) for n in range(nmax+1)]
 
     sinprod = sin(inc)*sin(phivec)
     numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
     denomenator = (-1.+sinprod)**2 * (1+sinprod)
     sqq = sqrt(numerator/denomenator)
-    rvec = np.maximum((1.-sqq + sinprod*(1.+sqq))/(sinprod-1.),2.+1.e-5)
-    cospsi = -sinprod#sin(inc) * sin(phivec)
-    psivec = np.arccos(cospsi)
+    rvec = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
+
+    rvecs = [rvec]+[3.+(rvec-3)*np.exp(-np.pi*n) for n in range(1,nmax+1)]
+    # rvecs = [np.real(beloborodov_r(psivecs[n], rho)) for n in range(nmax+1)]
+    # cospsi = -sinprod#sin(inc) * sin(phivec)
+    # psivec = np.arccos(cospsi)
     # sinpsi = sqrt(1. - cospsi**2)
-    cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
+    # cospsivecs = [cos(psivec) for psivec in psivecs]
+    cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])# for n in range(nmax+1)]
+
     # sinalpha =sqrt(1. - cosalpha**2)
-    alphavec = np.arccos(cosalpha)
-    rvecs = [rvec]
-    phivecs = [phivec]
-    alphavecs = [alphavec]
-    psivecs = [psivec]
+    # alphavec = np.arccos(cosalpha)
+    
+
+    # rvecs = [rvec]
+    phivecs = [phivec+n*np.pi for n in range(nmax+1)]
+    alphavecs = [np.arccos(cosalphavec)]+[np.arcsin((-1)**n * np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+    # psivecs = [psivec]
+    # for n in range(1, nmax+1):
+    #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
     return rvecs, phivecs, psivecs, alphavecs
 
 # def getsignpr(b, r, theta, psin):
@@ -246,6 +264,8 @@ class Bam:
             psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
             alphavecs = [getalphan(rhovec, rvecs[n], inc, psis[n]) for n in range(self.nmax+1)]
             # cosalphas = [np.cos(alpha) for alpha in alphas]
+
+        # self.test(rvecs[1])
 
         eta = chi+np.pi
         beq = sin(thetabz)

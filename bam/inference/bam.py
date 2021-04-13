@@ -32,11 +32,11 @@ def get_uniform_transform(lower, upper):
 def beloborodov_r(psi, b):
     psi = np.complex128(psi)
     b = np.complex128(b)
-    return np.sqrt((1-np.cos(psi)**2)/(1+np.cos(psi)**2) + b**2 / np.sin(psi)**2)-(1-np.cos(psi))/(1+np.cos(psi))
+    return np.sqrt(((1-np.cos(psi))**2)/((1+np.cos(psi))**2) + b**2 / np.sin(psi)**2)-(1-np.cos(psi))/(1+np.cos(psi))
 
 def getrt(rho):
-    # rho = np.complex128(rho)
-    det = (-9*rho**2 + np.sqrt(3)*np.sqrt(27*rho**4 - (2+0j) * rho**6))**(1/3)
+    rho = np.complex128(rho)
+    det = (-9*rho**2 + np.sqrt(3)*np.sqrt(27*rho**4 - rho**6))**(1/3)
     rt = rho**2 / (3**(1/3)*det) + det / 3**(2/3)
     return rt
 
@@ -123,7 +123,7 @@ def piecewise_better(rho, varphi, inc, nmax):
 
     rvecs = [rvec]+[beloborodov_r(psit - np.sqrt((psit-psivecs[n])**2), rho).real for n in range(1, nmax+1)]
     for vec in rvecs[1:]:
-        vec[nosubim_mask] = 1.e6
+        vec[nosubim_mask] = np.nan
 
     cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])
     phivecs = [phivec]+[phivec+n*np.pi for n in range(1,nmax+1)]
@@ -299,6 +299,7 @@ class Bam:
             # cosalphas = [np.cos(alpha) for alpha in alphas]
         if len(rvecs)>1:
             self.test(rvecs[1])
+            self.test(self.jfunc(rvecs[1], phivecs[1],jargs))
 
         eta = chi+np.pi
         beq = sin(thetabz)

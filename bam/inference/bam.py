@@ -297,9 +297,9 @@ class Bam:
             psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
             alphavecs = [getalphan(rhovec, rvecs[n], inc, psis[n]) for n in range(self.nmax+1)]
             # cosalphas = [np.cos(alpha) for alpha in alphas]
-        if len(rvecs)>1:
-            self.test(rvecs[1])
-            self.test(self.jfunc(rvecs[1], phivecs[1],jargs))
+        # if len(rvecs)>1:
+        #     self.test(rvecs[1])
+        #     self.test(self.jfunc(rvecs[1], phivecs[1],jargs))
 
         eta = chi+np.pi
         beq = sin(thetabz)
@@ -567,6 +567,13 @@ class Bam:
             v = obs.data['v']
             Nvis = len(vis)
             print("Building vis likelihood!")
+        if 'amp' in data_types:
+            sigma = obs.data['sigma']
+            amp = obs.unpack('amp')['amp']
+            u = obs.data['u']
+            v = obs.data['v']
+            Namp = len(amp)
+            print("Building amp likelihood!")
         if 'logcamp' in data_types:
             logcamp_data = obs.c_amplitudes(ctype='logcamp')
             logcamp = logcamp_data['camp']
@@ -616,6 +623,10 @@ class Bam:
                 model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
                 vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
                 out+=vislike
+            if 'amp' in data_types:
+                sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
+                model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
+                amplike = -1/Namp * np .sum(np.abs(model_amp-amp)**2 / sd**2)
             if 'logcamp' in data_types:
                 model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
                 logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
@@ -800,14 +811,33 @@ class Bam:
         vis_chisq = np.sum((absdelta/sd)**2)/(2*len(vis))
         return vis_chisq
 
+    def amp_chisq(self,obs):
+        if self.mode !='fixed':
+            print("Can only compute chisqs to fixed model!")
+            return
+
+        u = obs.data['u']
+        v = obs.data['v']
+        sigma = obs.data['sigma']  
+        amp = obs.unpack('amp')['amp']
+        # vis = obs.data['vis']
+        sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
+
+        model_amp = np.abs(self.vis_fixed(u,v))
+        absdelta = np.abs(model_amp-abs)
+        vis_chisq = np.sum((absdelta/sd)**2)/(len(amp))
+        return amp_chisq
+
+
     def all_chisqs(self, obs):
         if self.mode !='fixed':
             print("Can only compute chisqs to fixed model!")
             return
         logcamp_chisq = self.logcamp_chisq(obs)
         cphase_chisq = self.cphase_chisq(obs)
+        amp_chisq = self.amp_chisq(obs)
         vis_chisq = self.vis_chisq(obs)
-        return {'logcamp':logcamp_chisq,'cphase':cphase_chisq,'vis':vis_chisq}
+        return {'logcamp':logcamp_chisq,'cphase':cphase_chisq,'vis':vis_chisq,'amp':amp_chisq}
 
 
 

@@ -12,7 +12,7 @@ M87_inc = 17*np.pi/180
 M87_PA = (288-360)*np.pi/180
 
 
-SgrA_mass = 4e6 * 2e30
+SgrA_mass = 4.1e6 * 2e30
 SgrA_dist = 8*3.086e19
 
 def rho_conv(r, phi, inc):

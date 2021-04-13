@@ -35,13 +35,13 @@ def beloborodov_r(psi, b):
     return np.sqrt((1-np.cos(psi)**2)/(1+np.cos(psi)**2) + b**2 / np.sin(psi)**2)-(1-np.cos(psi))/(1+np.cos(psi))
 
 def getrt(rho):
-    rho = np.complex128(rho)
+    # rho = np.complex128(rho)
     det = (-9*rho**2 + np.sqrt(3)*np.sqrt(27*rho**4 - (2+0j) * rho**6))**(1/3)
     rt = 2.**(2/3)*rho**2 / (3**(1/3)*det) + 2.**(1/3)*det / 3**(2/3)
     return rt
 
 def getpsit(rt):
-    rt = np.complex128(rt)
+    # rt = np.complex128(rt)
     return np.arccos(-2 / (rt-2))
 #psit - np.abs(psit-psivecs[n))
 def test_better(rho, psi):
@@ -106,6 +106,38 @@ def beloborodov(rho, varphi, inc, nmax):
     #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
     return rvecs, phivecs, psivecs, alphavecs
 
+def piecewise_better(rho, varphi, inc, nmax):
+    phivec = arctan2(sin(varphi), cos(varphi)*cos(inc))
+    psivec = getpsin(inc, phivec, 0)
+    psivecs = [psivec]+[psivec+n*np.pi for n in range(1, nmax+1)]
+
+    sinprod = sin(inc)*sin(phivec)
+    numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
+    denomenator = (-1.+sinprod)**2 * (1+sinprod)
+    sqq = sqrt(numerator/denomenator)
+    rvec = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
+
+    rt = getrt(rho)
+    psit = getpsit(rt)
+    nosubim_mask = 2*psit < psivec+np.pi
+
+    rvecs = [rvec]+[beloborodov_r(psit - np.sqrt((psit-psivecs[n])**2), rho).real for n in range(1, nmax+1)]
+    for vec in rvecs[1:]:
+        vec[nosubim_mask] = 1.e6
+
+    cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])
+    phivecs = [phivec]+[phivec+n*np.pi for n in range(1,nmax+1)]
+    alphavecs = [np.arccos(cosalphavec)]+[np.arcsin((-1)**n * np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+    # psivecs = [psivec]
+    # for n in range(1, nmax+1):
+    #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
+    return rvecs, phivecs, psivecs, alphavecs
+
+
+
+
+
+
 # def getsignpr(b, r, theta, psin):
 #     # if b <= np.sqrt(27):
 #     #     return 1
@@ -136,7 +168,7 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='belo', Mscale = 2.e30*1.e9):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9):
         self.approxtype = approxtype
         self.fov = fov
         self.npix = npix
@@ -252,7 +284,7 @@ class Bam:
         if self.calctype == 'approx':
 
             if self.approxtype == 'better':
-                rvecs, phivecs, psivecs, alphavecs = betterborodov_v1(rhovec, self.varphivec, inc, self.nmax)
+                rvecs, phivecs, psivecs, alphavecs = piecewise_better(rhovec, self.varphivec, inc, self.nmax)
             elif self.approxtype == 'belo':
                 rvecs, phivecs, psivecs, alphavecs = beloborodov(rhovec, self.varphivec, inc, self.nmax)
             # rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
@@ -264,8 +296,8 @@ class Bam:
             psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
             alphavecs = [getalphan(rhovec, rvecs[n], inc, psis[n]) for n in range(self.nmax+1)]
             # cosalphas = [np.cos(alpha) for alpha in alphas]
-
-        # self.test(rvecs[1])
+        if len(rvecs)>1:
+            self.test(rvecs[1])
 
         eta = chi+np.pi
         beq = sin(thetabz)

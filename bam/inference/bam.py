@@ -37,7 +37,7 @@ def beloborodov_r(psi, b):
 def getrt(rho):
     # rho = np.complex128(rho)
     det = (-9*rho**2 + np.sqrt(3)*np.sqrt(27*rho**4 - (2+0j) * rho**6))**(1/3)
-    rt = 2.**(2/3)*rho**2 / (3**(1/3)*det) + 2.**(1/3)*det / 3**(2/3)
+    rt = rho**2 / (3**(1/3)*det) + det / 3**(2/3)
     return rt
 
 def getpsit(rt):
@@ -168,7 +168,8 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9, polflux=True):
+        self.polflux = polflux
         self.approxtype = approxtype
         self.fov = fov
         self.npix = npix
@@ -400,9 +401,10 @@ class Bam:
             # profile=1.
             # 
             # print(self.profile)
-
-            polarizedintensity = sinzeta**(1.+spec) * delta**(3. + spec) * profile
-            
+            if self.polflux:
+                polarizedintensity = sinzeta**(1.+spec) * delta**(3. + spec) * profile
+            else:
+                polarizedintensity = delta**(3+spec)*profile        
             # if INTENSITYISOTROPIC:
             #     intensity = delta**(3. + SPECTRALINDEX)
             # else:
@@ -460,12 +462,18 @@ class Bam:
 
             ealpha = (ybeta * k2 - nu * k1) / den
             ebeta = (ybeta * k1 + nu * k2) / den
+            if self.polflux:
+                qvec = -mag*(ealpha**2 - ebeta**2)
+                uvec = -mag*(2*ealpha*ebeta)
+                qvec[np.isnan(qvec)]=0
+                uvec[np.isnan(uvec)]=0
+                ivec = sqrt(qvec**2 + uvec**2)
+            else:
+                ivec = mag
+                ivec[np.isnan(ivec)] = 0
+                qvec = 0*ivec
+                uvec = 0*ivec
 
-            qvec = -mag*(ealpha**2 - ebeta**2)
-            uvec = -mag*(2*ealpha*ebeta)
-            qvec[np.isnan(qvec)]=0
-            uvec[np.isnan(uvec)]=0
-            ivec = sqrt(qvec**2 + uvec**2)
             qvecs.append(qvec)
             uvecs.append(uvec)
             ivecs.append(ivec)

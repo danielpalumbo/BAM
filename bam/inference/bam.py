@@ -824,7 +824,7 @@ class Bam:
         sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
 
         model_amp = np.abs(self.vis_fixed(u,v))
-        absdelta = np.abs(model_amp-abs)
+        absdelta = np.abs(model_amp-amp)
         vis_chisq = np.sum((absdelta/sd)**2)/(len(amp))
         return amp_chisq
 

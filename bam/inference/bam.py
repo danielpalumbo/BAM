@@ -618,24 +618,34 @@ class Bam:
             ivec = np.sum(ivecs,axis=0)
             qvec = np.sum(qvecs,axis=0)
             uvec = np.sum(uvecs,axis=0)
+
             if 'vis' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
                 model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
-                vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
-                out+=vislike
+                # vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
+                vislike = -np.sum(np.abs(model_vis-vis)**2 / sd**2)
+                ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
+                out+=ln_norm
             if 'amp' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
                 model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
-                amplike = -1/Namp * np .sum(np.abs(model_amp-amp)**2 / sd**2)
+                # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
+                amplike = -0.5*np.sum(np.abs(model_amp-amp)**2 / sd**2)
+                ln_norm = amplike-np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
+                out+=ln_norm
             if 'logcamp' in data_types:
                 model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
-                logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
-                out += logcamplike
+                # logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
+                logcamplike = -0.5*np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
+                ln_norm = logcamplike-np.sum(np.log((2.0*np.pi)**0.5 * logcamp_sigma)) 
+                out += ln_norm
             if 'cphase' in data_types:
                 model_cphase = self.cphase(ivec, rotimxvec, rotimyvec, cphaseu1, cphaseu2, cphaseu3, cphasev1, cphasev2, cphasev3)
-                cphaselike = -2/Ncphase * np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
-                out += cphaselike
-            return out
+                # cphaselike = -2/Ncphase * np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
+                cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
+                ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
+                out += ln_norm
+            return out/2
         print("Built combined likelihood function!")
         return loglike
 

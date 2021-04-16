@@ -677,7 +677,7 @@ class Bam:
         return sampler
 
     def run_nested(self, maxiter=None, maxcall=None, dlogz=None, logl_max=inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True):
-        self.recent_sampler.run_nested(maxiter=maxiter,maxcall=maxcall,dlogz=dlogz,logl)
+        self.recent_sampler.run_nested(maxiter=maxiter,maxcall=maxcall,dlogz=dlogz,logl_max=logl_max, n_effective=n_effective,add_live=add_live, print_progress=print_progress, print_func=None, save_bounds=True)
         self.recent_results = self.recent_sampler.results
         return self.recent_results
 

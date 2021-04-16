@@ -666,18 +666,18 @@ class Bam:
             sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive)#, pool=pool, queue_size=queue_size)
         else:
             sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive)#, pool=pool, queue_size=queue_size)
+        self.recent_sampler=sampler
         return sampler
 
     def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi'):#, pool=None, queue_size=None):
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)#, pool=pool, queue_size=queue_size)
-
-        self.recent_sampler = sampler
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
+        return sampler
 
-    def run_nested(self):
-        self.recent_sampler.run_nested()
+    def run_nested(self, maxiter=None, maxcall=None, dlogz=None, logl_max=inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True):
+        self.recent_sampler.run_nested(maxiter=maxiter,maxcall=maxcall,dlogz=dlogz,logl)
         self.recent_results = self.recent_sampler.results
         return self.recent_results
 
@@ -739,7 +739,7 @@ class Bam:
         return resampled
 
     def random_sample_Bam(self, samples=None, weights=None):
-        if samples == None:
+        if samples is None:
             samples = self.resample_equal()
         sample = samples[random.randint(0,len(samples)-1)]
         to_eval = []

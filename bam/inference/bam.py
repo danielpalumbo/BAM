@@ -630,7 +630,7 @@ class Bam:
                 sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
                 model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
                 # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
-                amplike = -0.5*np.sum(np.abs(model_amp-amp)**2 / sd**2)
+                amplike = -0.5*np.sum((model_amp-amp)**2 / sd**2)
                 ln_norm = amplike-np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'logcamp' in data_types:

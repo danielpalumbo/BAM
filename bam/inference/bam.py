@@ -569,13 +569,13 @@ class Bam:
             print("Building vis likelihood!")
         if 'amp' in data_types:
             sigma = obs.data['sigma']
-            amp = obs.unpack('amp')['amp']
+            amp = obs.unpack('amp', debias=True)['amp']
             u = obs.data['u']
             v = obs.data['v']
             Namp = len(amp)
             print("Building amp likelihood!")
         if 'logcamp' in data_types:
-            logcamp_data = obs.c_amplitudes(ctype='logcamp')
+            logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=True)
             logcamp = logcamp_data['camp']
             logcamp_sigma = logcamp_data['sigmaca']
             campu1 = logcamp_data['u1']

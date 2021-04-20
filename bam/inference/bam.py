@@ -168,7 +168,8 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9, polflux=True):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9, polflux=True, source=''):
+        self.source = source
         self.polflux = polflux
         self.approxtype = approxtype
         self.fov = fov
@@ -670,6 +671,7 @@ class Bam:
         return sampler
 
     def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi'):#, pool=None, queue_size=None):
+        self.src = obs.source
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)#, pool=pool, queue_size=queue_size)
@@ -752,7 +754,7 @@ class Bam:
 
 
 
-    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source='M87',n='all'):
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source=self.source,n='all'):
         """
         Returns an ehtim Image object corresponding to the Blimage n0 emission
         """

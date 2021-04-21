@@ -169,6 +169,7 @@ class Bam:
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
     def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9, polflux=True, source=''):
+        self.dynamic=False
         self.source = source
         self.polflux = polflux
         self.approxtype = approxtype
@@ -662,7 +663,7 @@ class Bam:
 
     
     def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi'):#, pool=None, queue_size=None):
-        
+        self.dynamic=dynamic
         if dynamic:
             sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive)#, pool=pool, queue_size=queue_size)
         else:
@@ -671,7 +672,7 @@ class Bam:
         return sampler
 
     def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi'):#, pool=None, queue_size=None):
-        self.src = obs.source
+        self.source = obs.source
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)#, pool=pool, queue_size=queue_size)
@@ -683,6 +684,10 @@ class Bam:
         self.recent_results = self.recent_sampler.results
         return self.recent_results
 
+    def run_nested_default(self):
+        self.recent_sampler.run_nested()
+        self.recent_results = self.recent_sampler.results
+        return self.recent_results
         
     def runplot(self, save='', show=True):
         fig, axes = dyplot.runplot(self.recent_results)
@@ -754,7 +759,7 @@ class Bam:
 
 
 
-    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, source=self.source,n='all'):
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all'):
         """
         Returns an ehtim Image object corresponding to the Blimage n0 emission
         """
@@ -773,7 +778,7 @@ class Bam:
             qvec = self.qvecs[n]
             uvec = self.uvecs[n]
 
-        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source='M87')
+        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=self.source)
         im.ivec = ivec
         im.qvec = qvec
         im.uvec = uvec

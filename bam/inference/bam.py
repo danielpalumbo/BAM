@@ -759,7 +759,9 @@ class Bam:
 
 
 
-    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all'):
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = ''):
+        if source == '':
+            source = self.source
         """
         Returns an ehtim Image object corresponding to the Blimage n0 emission
         """
@@ -778,7 +780,7 @@ class Bam:
             qvec = self.qvecs[n]
             uvec = self.uvecs[n]
 
-        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=self.source)
+        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)
         im.ivec = ivec
         im.qvec = qvec
         im.uvec = uvec

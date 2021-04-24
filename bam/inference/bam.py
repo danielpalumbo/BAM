@@ -168,7 +168,8 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9, polflux=True, source=''):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
+        self.periodic=periodic
         self.dynamic=False
         self.source = source
         self.polflux = polflux
@@ -233,13 +234,14 @@ class Bam:
         self.periodic_indices=[]
         #if PA and chi are being modeled, check if they are allowing a full 2pi wrap
         #if so, let dynesty know they are periodic later
-        for i in ['PA','chi']:
-            if i in self.modeled_names:
-                bounds = self.modeled_params[self.modeled_names.index(i)]
-                if np.isclose(np.exp(1j*bounds[0]),np.exp(1j*bounds[1]),rtol=1e-12):
-                    print("Found periodic prior on "+str(i))
-                    self.periodic_names.append(i)
-                    self.periodic_indices.append(self.modeled_names.index(i))
+        if self.periodic:
+            for i in ['PA','chi']:
+                if i in self.modeled_names:
+                    bounds = self.modeled_params[self.modeled_names.index(i)]
+                    if np.isclose(np.exp(1j*bounds[0]),np.exp(1j*bounds[1]),rtol=1e-12):
+                        print("Found periodic prior on "+str(i))
+                        self.periodic_names.append(i)
+                        self.periodic_indices.append(self.modeled_names.index(i))
         self.model_dim = len(self.modeled_names)
         # self.periodic_names = [i for i in ['PA','chi'] if i in self.modeled_names]
         # self.periodic_indices = [self.modeled_names.index(i) for i in self.periodic_names]

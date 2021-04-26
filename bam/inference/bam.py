@@ -101,6 +101,7 @@ def beloborodov(rho, varphi, inc, nmax):
     # rvecs = [rvec]
     phivecs = [phivec+n*np.pi for n in range(nmax+1)]
     alphavecs = [np.arccos(cosalphavec)]+[np.arcsin((-1)**n * np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+
     # psivecs = [psivec]
     # for n in range(1, nmax+1):
     #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
@@ -128,6 +129,9 @@ def piecewise_better(rho, varphi, inc, nmax):
     cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])
     phivecs = [phivec]+[phivec+n*np.pi for n in range(1,nmax+1)]
     alphavecs = [np.arccos(cosalphavec)]+[np.arcsin((-1)**n * np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+    for i in range(1,len(alphavecs)):
+        alphavecs[i] = np.sign(alphavecs[i])*(np.pi-np.abs(alphavecs[i]))
+    # print(alphavecs)
     # psivecs = [psivec]
     # for n in range(1, nmax+1):
     #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
@@ -303,7 +307,10 @@ class Bam:
             # cosalphas = [np.cos(alpha) for alpha in alphas]
         # if len(rvecs)>1:
         #     self.test(rvecs[1])
-        #     self.test(self.jfunc(rvecs[1], phivecs[1],jargs))
+        #     self.test(phivecs[1])
+        #     self.test(alphavecs[0])
+        #     self.test(alphavecs[1])
+            # self.test(self.jfunc(rvecs[1], phivecs[1],jargs))
 
         eta = chi+np.pi
         beq = sin(thetabz)
@@ -378,15 +385,18 @@ class Bam:
             #     cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
             #     sinalpha =sqrt(1. - cosalpha**2)
                 
-            
-            sinxi = sintheta * cosphi / sinpsi
+            # self.test(psivec)
+            sinxi = sintheta * cosphi / sinpsi * (-1)**n
             cosxi = costheta / sinpsi
-            
+            # self.test(sinxi)
+            # self.test(cosxi)
             kPthat = gfacinv
             kPxhat = cosalpha * gfacinv
             kPyhat = -sinxi * sinalpha * gfacinv
             kPzhat = cosxi * sinalpha * gfacinv
-            
+            # self.test(kPthat)
+            # self.test(kPxhat)
+            # self.test(kPyhat)
             kFthat = gamma * (kPthat - betax * kPxhat - betay * kPyhat)
             kFxhat = -gamma * betax * kPthat + (1. + (gamma-1.) * coschi**2) * kPxhat + (gamma-1.) * coschi * sinchi * kPyhat
             kFyhat = -gamma * betay * kPthat + (gamma-1.) * sinchi * coschi * kPxhat + (1. + (gamma-1.) * sinchi**2) * kPyhat
@@ -395,6 +405,8 @@ class Bam:
 
             delta = 1. / kFthat
             
+            # self.test(delta)
+
             kcrossbx = kFyhat * bz - kFzhat * by
             kcrossby = kFzhat * bx - kFxhat * bz
             kcrossbz = kFxhat * by - kFyhat * bx

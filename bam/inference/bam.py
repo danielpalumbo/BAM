@@ -131,6 +131,7 @@ def piecewise_better(rho, varphi, inc, nmax):
     alphavecs = [np.arccos(cosalphavec)]+[np.arcsin((-1)**n * np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
     for i in range(1,len(alphavecs)):
         alphavecs[i] = np.sign(alphavecs[i])*(np.pi-np.abs(alphavecs[i]))
+    # alphavecs = [alphavecs[0]]*len(alphavecs)
     # print(alphavecs)
     # psivecs = [psivec]
     # for n in range(1, nmax+1):
@@ -256,6 +257,7 @@ class Bam:
             self.ivecs, self.qvecs, self.uvecs, self.rotimxvec, self.rotimyvec = self.compute_image(self.imparams)
             # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
 
+        self.modelim = None
         print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)
 
         if self.calctype == 'approx':  
@@ -386,17 +388,22 @@ class Bam:
             #     sinalpha =sqrt(1. - cosalpha**2)
                 
             # self.test(psivec)
-            sinxi = sintheta * cosphi / sinpsi * (-1)**n
+            sinxi = sintheta * cosphi / sinpsi# * (-1)**n
             cosxi = costheta / sinpsi
+            # if n%2 == 1:
+            #     sinxi = np.sin(np.pi-np.arcsin(sinxi))
+            #     cosxi = np.cos(np.pi-np.arccos(cosxi))
+
             # self.test(sinxi)
             # self.test(cosxi)
             kPthat = gfacinv
             kPxhat = cosalpha * gfacinv
             kPyhat = -sinxi * sinalpha * gfacinv
-            kPzhat = cosxi * sinalpha * gfacinv
+            kPzhat = cosxi * sinalpha * gfacinv# * (-1)**n
             # self.test(kPthat)
             # self.test(kPxhat)
             # self.test(kPyhat)
+            # self.test(kPzhat)
             kFthat = gamma * (kPthat - betax * kPxhat - betay * kPyhat)
             kFxhat = -gamma * betax * kPthat + (1. + (gamma-1.) * coschi**2) * kPxhat + (gamma-1.) * coschi * sinchi * kPyhat
             kFyhat = -gamma * betay * kPthat + (gamma-1.) * sinchi * coschi * kPxhat + (1. + (gamma-1.) * sinchi**2) * kPyhat
@@ -437,7 +444,7 @@ class Bam:
             fFthat = 0.
             fFxhat = kcrossbx / (kFthat * bmag)
             fFyhat = kcrossby / (kFthat * bmag)
-            fFzhat = kcrossbz / (kFthat * bmag)
+            fFzhat = kcrossbz / (kFthat * bmag) * (-1)**n
             
             # fPthat = gamma * (fFthat + beta * fFyhat)
             # fPxhat = fFxhat
@@ -691,6 +698,7 @@ class Bam:
         loglike = self.build_likelihood(obs, data_types=data_types)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)#, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
+        
         return sampler
 
     def run_nested(self, maxiter=None, maxcall=None, dlogz=None, logl_max=np.inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True):

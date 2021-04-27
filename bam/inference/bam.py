@@ -566,6 +566,31 @@ class Bam:
         logcamp_model = np.log(amp12)+np.log(amp34)-np.log(amp23)-np.log(amp14)
         return logcamp_model
 
+    def modelim_ivis(self, uv, ttype='nfft'):
+        return self.modelim.sample_uv(uv,ttype=ttype)[0]
+
+    def modelim_logcamp(self, uv1, uv2, uv3, uv4, ttype='nfft'):
+        vis12 = self.modelim_ivis(uv1,ttype=ttype)
+        vis34 = self.modelim_ivis(uv2,ttype=ttype)
+        vis23 = self.modelim_ivis(uv3,ttype=ttype)
+        vis14 = self.modelim_ivis(uv4,ttype=ttype)
+        amp12 = np.abs(vis12)
+        amp34 = np.abs(vis34)
+        amp23 = np.abs(vis23)
+        amp14 = np.abs(vis14)
+        logcamp_model = np.log(amp12)+np.log(amp34)-np.log(amp23)-np.log(amp14)
+        return logcamp_model
+
+    def modelim_cphase(self, uv1, uv2, uv3, ttype='nfft'):
+        vis12 = self.modelim_ivis(uv1,ttype=ttype)
+        vis23 = self.modelim_ivis(uv2,ttype=ttype)
+        vis31 = self.modelim_ivis(uv3,ttype=ttype)
+        phase12 = np.angle(vis12)
+        phase23 = np.angle(vis23)
+        phase31 = np.angle(vis31)
+        cphase_model = phase12+phase23+phase31
+        return cphase_model
+
     def logcamp_fixed(self, u1, u2, u3, u4, v1, v2, v3, v4):
         ivec = np.sum(self.ivecs, axis=0)
         return self.logcamp(ivec, self.rotimxvec, self.rotimyvec, u1, u2, u3, u4, v1, v2, v3, v4)
@@ -574,7 +599,7 @@ class Bam:
         ivec = np.sum(self.ivecs, axis=0)
         return self.cphase(ivec, self.rotimxvec, self.rotimyvec, u1, u2, u3, v1, v2, v3)
 
-    def build_likelihood(self, obs, data_types=['vis']):
+    def build_likelihood(self, obs, data_types=['vis'], ttype='nfft'):
         """
         Given an observation and a list of data product names, 
         return a likelihood function that accounts for each contribution. 
@@ -588,6 +613,7 @@ class Bam:
             amp = obs.unpack('amp')['amp']
             u = obs.data['u']
             v = obs.data['v']
+            visuv = np.vstack([u,v]).T
             Nvis = len(vis)
             print("Building vis likelihood!")
         if 'amp' in data_types:
@@ -595,6 +621,7 @@ class Bam:
             amp = obs.unpack('amp', debias=True)['amp']
             u = obs.data['u']
             v = obs.data['v']
+            ampuv = np.vstack([u,v]).T
             Namp = len(amp)
             print("Building amp likelihood!")
         if 'logcamp' in data_types:
@@ -609,6 +636,10 @@ class Bam:
             campv2 = logcamp_data['v2']
             campv3 = logcamp_data['v3']
             campv4 = logcamp_data['v4']
+            campuv1 = np.vstack([campu1,campv1]).T
+            campuv2 = np.vstack([campu2,campv2]).T
+            campuv3 = np.vstack([campu3,campv3]).T
+            campuv4 = np.vstack([campu4,campv4]).T
             Ncamp = len(logcamp)
             print("Building logcamp likelihood!")
         if 'cphase' in data_types:
@@ -619,6 +650,9 @@ class Bam:
             cphasev1 = cphase_data['v1']
             cphasev2 = cphase_data['v2']
             cphasev3 = cphase_data['v3']
+            cphaseuv1 = np.vstack([cphaseu1,cphasev1]).T
+            cphaseuv2 = np.vstack([cphaseu2,cphasev2]).T
+            cphaseuv3 = np.vstack([cphaseu3,cphasev3]).T
             cphase = cphase_data['cphase']
             cphase_sigma = cphase_data['sigmacp']
             Ncphase = len(cphase)
@@ -642,28 +676,37 @@ class Bam:
             qvec = np.sum(qvecs,axis=0)
             uvec = np.sum(uvecs,axis=0)
 
+            self.modelim.ivec = ivec
+            self.modelim.qvec = qvec
+            self.modelim.uvec = uvec
+            self.modelim.pa = to_eval[self.all_names.index('PA')]
+
             if 'vis' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
-                model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
+                model_vis = self.modelim_ivis(visuv, ttype=ttype)
+                # model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
                 # vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
                 vislike = -np.sum(np.abs(model_vis-vis)**2 / sd**2)
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'amp' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
-                model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
+                model_amp = np.abs(self.modelim_ivis(ampuv, ttype=ttype))
+                # model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
                 # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
                 amplike = -0.5*np.sum((model_amp-amp)**2 / sd**2)
                 ln_norm = amplike-np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'logcamp' in data_types:
-                model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
+                model_logcamp = self.modelim_logcamp(campuv1, campuv2, campuv3, campuv4, ttype=ttype)
+                # model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
                 # logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
                 logcamplike = -0.5*np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
                 ln_norm = logcamplike-np.sum(np.log((2.0*np.pi)**0.5 * logcamp_sigma)) 
                 out += ln_norm
             if 'cphase' in data_types:
-                model_cphase = self.cphase(ivec, rotimxvec, rotimyvec, cphaseu1, cphaseu2, cphaseu3, cphasev1, cphasev2, cphasev3)
+                model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
+                # model_cphase = self.cphase(ivec, rotimxvec, rotimyvec, cphaseu1, cphaseu2, cphaseu3, cphasev1, cphasev2, cphasev3)
                 # cphaselike = -2/Ncphase * np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
                 cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
                 ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
@@ -692,13 +735,13 @@ class Bam:
         self.recent_sampler=sampler
         return sampler
 
-    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi'):#, pool=None, queue_size=None):
+    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft'):#, pool=None, queue_size=None):
         self.source = obs.source
+        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)
         ptform = self.build_prior_transform()
-        loglike = self.build_likelihood(obs, data_types=data_types)
+        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)#, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
-        
         return sampler
 
     def run_nested(self, maxiter=None, maxcall=None, dlogz=None, logl_max=np.inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True):

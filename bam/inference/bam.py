@@ -21,11 +21,6 @@ def example_jfunc(r, phi, jargs):
     thickness = jargs[1]
     return exp(-4.*log(2)*((r-peak_r)/thickness)**2)
 
-# def example_model_jfunc(r, phi, jargs):
-#     peak_r = jargs[0]
-#     thickness = jargs[1]
-#     return pm.math.exp(-4.*np.log(2)*((r-peak_r)/thickness)**2)
-
 def get_uniform_transform(lower, upper):
     return lambda x: (upper-lower)*x + lower
 
@@ -43,7 +38,7 @@ def getrt(rho):
 def getpsit(rt):
     # rt = np.complex128(rt)
     return np.arccos(-2 / (rt-2))
-#psit - np.abs(psit-psivecs[n))
+
 def test_better(rho, psi):
     rt = getrt(rho)
     psit = getpsit(rt)
@@ -138,34 +133,33 @@ def piecewise_better(rho, varphi, inc, nmax):
     #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
     return rvecs, phivecs, psivecs, alphavecs
 
+def cphase_uvpairs(cphase_data):
+    cphaseu1 = cphase_data['u1']
+    cphaseu2 = cphase_data['u2']
+    cphaseu3 = cphase_data['u3']
+    cphasev1 = cphase_data['v1']
+    cphasev2 = cphase_data['v2']
+    cphasev3 = cphase_data['v3']
+    cphaseuv1 = np.vstack([cphaseu1,cphasev1]).T
+    cphaseuv2 = np.vstack([cphaseu2,cphasev2]).T
+    cphaseuv3 = np.vstack([cphaseu3,cphasev3]).T
+    return cphaseuv1, cphaseuv2, cphaseuv3
 
+def logcamp_uvpairs(logcamp_data):
+    campu1 = logcamp_data['u1']
+    campu2 = logcamp_data['u2']
+    campu3 = logcamp_data['u3']
+    campu4 = logcamp_data['u4']
+    campv1 = logcamp_data['v1']
+    campv2 = logcamp_data['v2']
+    campv3 = logcamp_data['v3']
+    campv4 = logcamp_data['v4']
+    campuv1 = np.vstack([campu1,campv1]).T
+    campuv2 = np.vstack([campu2,campv2]).T
+    campuv3 = np.vstack([campu3,campv3]).T
+    campuv4 = np.vstack([campu4,campv4]).T
+    return campuv1, campuv2, campuv3, campuv4
 
-
-
-
-# def getsignpr(b, r, theta, psin):
-#     # if b <= np.sqrt(27):
-#     #     return 1
-#     psit = getpsit(b, theta)
-#     out = (np.abs(psin) < psit).astype(int)
-#     out[np.abs(psin)<psit] = -1
-#     out[b <= np.sqrt(27)]=1
-#     return out
-
-# #now compute alpha_n
-# def approxalphan(b, r, theta, psin):
-#     signpr = getsignpr(b, r, theta, psin)
-#     arctannum = np.arctan(1 / np.sqrt(r**2/b**2/(1-2/r)-1))
-#     signpsin = np.sign(psin)
-#     out = signpsin * (np.pi-arctannum)
-#     mask = (signpr == 1)*(0<psin)*(psin<np.pi)
-#     out[mask] = (signpsin*arctannum)[mask]
-#     return out
-# rho = np.linspace(0,10,100)
-# varphi = np.zeros_like(rho)
-# rvecs, phivecs = betterborodov_v1(rho, varphi, 0, 0)
-# plt.plot(rho, rvecs[0])
-# plt.show()
 
 class Bam:
     '''The Bam class is a collection of accretion flow and black hole parameters.
@@ -254,8 +248,8 @@ class Bam:
         if self.mode == 'fixed':
             print("Fixed Bam: precomputing all subimages.")
             self.imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
-            self.ivecs, self.qvecs, self.uvecs, self.rotimxvec, self.rotimyvec = self.compute_image(self.imparams)
-            # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
+            self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
+            # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
 
         self.modelim = None
         print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)
@@ -334,8 +328,8 @@ class Bam:
         #note that this is essentially an inverse mapping, saying where
         #previously unrotated points can be found on the new image, after rotation
         #hence, the minus sign
-        rotimxvec = cos(-PA)*self.imxvec - sin(-PA)*self.imyvec
-        rotimyvec = sin(-PA)*self.imxvec + cos(-PA)*self.imyvec
+        # rotimxvec = cos(-PA)*self.imxvec - sin(-PA)*self.imyvec
+        # rotimyvec = sin(-PA)*self.imxvec + cos(-PA)*self.imyvec
         # self.test(rotimxvec)
         ivecs = []
         qvecs = []
@@ -509,30 +503,9 @@ class Bam:
         ivecs = [ivec*zbl/tf for ivec in ivecs]
         qvecs = [qvec*zbl/tf for qvec in qvecs]
         uvecs = [uvec*zbl/tf for uvec in uvecs]
-        return ivecs, qvecs, uvecs, rotimxvec, rotimyvec
+        return ivecs, qvecs, uvecs#, rotimxvec, rotimyvec
 
-    def vis(self, vec, rotimxvec, rotimyvec, u, v):#, vis_types=list('i')):
 
-        u = np.array(u)
-        v = np.array(v)
-
-        matrix = np.outer(u, rotimxvec)+np.outer(v, rotimyvec)
-        A_real = np.cos(2.0*np.pi*matrix)
-        A_imag = np.sin(2.0*np.pi*matrix)
-        visreal_model = np.dot(A_real,vec)
-        visimag_model = np.dot(A_imag,vec)
-        return visreal_model+1j*visimag_model
-
-    def vis_fixed(self, u, v):
-        if self.mode=='model':
-            print("Can't compute fixed visibilities in model mode!")
-            return
-        # imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
-        # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
-        ivec = np.sum(self.ivecs, axis=0)
-        qvec = np.sum(self.qvecs, axis=0)
-        uvec = np.sum(self.uvecs, axis=0)
-        return self.vis(ivec, self.rotimxvec, self.rotimyvec, u, v)
 
     def observe_same(self, obs):
         if self.mode=='model':
@@ -540,31 +513,6 @@ class Bam:
             return
         im = self.make_image(ra=obs.ra, dec=obs.dec, rf=obs.rf, mjd = obs.mjd, source=obs.source)
         return im.observe_same(obs)
-
-    def cphase(self, vec, rotimxvec, rotimyvec, u1, u2, u3, v1, v2, v3):
-        
-        vis12 = self.vis(vec, rotimxvec, rotimyvec, u1, v1)
-        vis23 = self.vis(vec, rotimxvec, rotimyvec, u2, v2)
-        vis31 = self.vis(vec, rotimxvec, rotimyvec, u3, v3)
-        phase12 = np.angle(vis12)
-        phase23 = np.angle(vis23)
-        phase31 = np.angle(vis31)
-        cphase_model = phase12+phase23+phase31
-        return cphase_model
-
-    def logcamp(self, vec, rotimxvec, rotimyvec, u1, u2, u3, u4, v1, v2, v3, v4):
-        
-        # print("Building direct image FT matrices.")
-        vis12 = self.vis(vec, rotimxvec, rotimyvec,u1,v1)
-        vis34 = self.vis(vec, rotimxvec, rotimyvec,u2,v2)
-        vis23 = self.vis(vec, rotimxvec, rotimyvec,u3,v3)
-        vis14 = self.vis(vec, rotimxvec, rotimyvec,u4,v4)
-        amp12 = np.abs(vis12)
-        amp34 = np.abs(vis34)
-        amp23 = np.abs(vis23)
-        amp14 = np.abs(vis14)
-        logcamp_model = np.log(amp12)+np.log(amp34)-np.log(amp23)-np.log(amp14)
-        return logcamp_model
 
     def modelim_ivis(self, uv, ttype='nfft'):
         return self.modelim.sample_uv(uv,ttype=ttype)[0]
@@ -590,14 +538,7 @@ class Bam:
         phase31 = np.angle(vis31)
         cphase_model = phase12+phase23+phase31
         return cphase_model
-
-    def logcamp_fixed(self, u1, u2, u3, u4, v1, v2, v3, v4):
-        ivec = np.sum(self.ivecs, axis=0)
-        return self.logcamp(ivec, self.rotimxvec, self.rotimyvec, u1, u2, u3, u4, v1, v2, v3, v4)
-
-    def cphase_fixed(self, u1, u2, u3, v1, v2, v3):
-        ivec = np.sum(self.ivecs, axis=0)
-        return self.cphase(ivec, self.rotimxvec, self.rotimyvec, u1, u2, u3, v1, v2, v3)
+    
 
     def build_likelihood(self, obs, data_types=['vis'], ttype='nfft'):
         """
@@ -628,31 +569,12 @@ class Bam:
             logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=True)
             logcamp = logcamp_data['camp']
             logcamp_sigma = logcamp_data['sigmaca']
-            campu1 = logcamp_data['u1']
-            campu2 = logcamp_data['u2']
-            campu3 = logcamp_data['u3']
-            campu4 = logcamp_data['u4']
-            campv1 = logcamp_data['v1']
-            campv2 = logcamp_data['v2']
-            campv3 = logcamp_data['v3']
-            campv4 = logcamp_data['v4']
-            campuv1 = np.vstack([campu1,campv1]).T
-            campuv2 = np.vstack([campu2,campv2]).T
-            campuv3 = np.vstack([campu3,campv3]).T
-            campuv4 = np.vstack([campu4,campv4]).T
+            campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
             Ncamp = len(logcamp)
             print("Building logcamp likelihood!")
         if 'cphase' in data_types:
             cphase_data = obs.c_phases(ang_unit='rad')
-            cphaseu1 = cphase_data['u1']
-            cphaseu2 = cphase_data['u2']
-            cphaseu3 = cphase_data['u3']
-            cphasev1 = cphase_data['v1']
-            cphasev2 = cphase_data['v2']
-            cphasev3 = cphase_data['v3']
-            cphaseuv1 = np.vstack([cphaseu1,cphasev1]).T
-            cphaseuv2 = np.vstack([cphaseu2,cphasev2]).T
-            cphaseuv3 = np.vstack([cphaseu3,cphasev3]).T
+            cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)
             cphase = cphase_data['cphase']
             cphase_sigma = cphase_data['sigmacp']
             Ncphase = len(cphase)
@@ -670,7 +592,7 @@ class Bam:
             #M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e + jargs
             #f and e are not used in image computation, so slice around them for now
             imparams = to_eval[:9] + [to_eval[11:]]
-            ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
+            ivecs, qvecs, uvecs = self.compute_image(imparams)#, rotimxvec, rotimyvec 
             out = 0.
             ivec = np.sum(ivecs,axis=0)
             qvec = np.sum(qvecs,axis=0)
@@ -802,7 +724,9 @@ class Bam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(mean[self.modeled_names.index(name)])
-        return Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new.modelim = new.make_image(modelim=True)
+        return new
 
     def resample_equal(self):
         samples = self.recent_results.samples
@@ -820,11 +744,12 @@ class Bam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(sample[self.modeled_names.index(name)])
-        return Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new.modelim = new.make_image(modelim=True)
+        return new
 
 
-
-    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = ''):
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = '', modelim=False):
         if source == '':
             source = self.source
         """
@@ -850,7 +775,11 @@ class Bam:
         im.qvec = qvec
         im.uvec = uvec
 
-        im = im.rotate(self.PA)
+        if modelim:
+            im.pa = self.PA
+        else:
+            im = im.rotate(self.PA)
+
         # im.ivec *= self.tf / im.total_flux()
         return im
 
@@ -860,29 +789,38 @@ class Bam:
         if self.mode != 'fixed':
             print("Can only compute chisqs to fixed model!")
             return
+        if self.modelim is None:
+            self.modelim = self.make_image(modelim=True)
         logcamp_data = obs.c_amplitudes(ctype='logcamp')
         sigmaca = logcamp_data['sigmaca']
         logcamp = logcamp_data['camp']
-        model_logcamps = self.logcamp_fixed(logcamp_data['u1'],logcamp_data['u2'],logcamp_data['u3'],logcamp_data['u4'],logcamp_data['v1'],logcamp_data['v2'],logcamp_data['v3'],logcamp_data['v4'])
-        logcamp_chisq = 1/len(sigmaca) * np.sum(np.abs((logcamp-model_logcamps)/sigmaca)**2)
+        campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
+        model_logcamp = self.modelim_logcamp(campuv1, campuv2, campuv3, campuv4)
+        # model_logcamps = self.logcamp_fixed(logcamp_data['u1'],logcamp_data['u2'],logcamp_data['u3'],logcamp_data['u4'],logcamp_data['v1'],logcamp_data['v2'],logcamp_data['v3'],logcamp_data['v4'])
+        logcamp_chisq = 1/len(sigmaca) * np.sum(np.abs((logcamp-model_logcamp)/sigmaca)**2)
         return logcamp_chisq
 
     def cphase_chisq(self,obs):
         if self.mode != 'fixed':
             print("Can only compute chisqs to fixed model!")
             return
+        if self.modelim is None:
+            self.modelim = self.make_image(modelim=True)
         cphase_data = obs.c_phases(ang_unit='rad')
         cphase = cphase_data['cphase']
         sigmacp = cphase_data['sigmacp']
-        model_cphases = self.cphase_fixed(cphase_data['u1'],cphase_data['u2'],cphase_data['u3'],cphase_data['v1'],cphase_data['v2'],cphase_data['v3'])
-        cphase_chisq = (2.0/len(sigmacp)) * np.sum((1.0 - np.cos(cphase-model_cphases))/(sigmacp**2))
+        cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)
+        model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3)
+        # model_cphases = self.cphase_fixed(cphase_data['u1'],cphase_data['u2'],cphase_data['u3'],cphase_data['v1'],cphase_data['v2'],cphase_data['v3'])
+        cphase_chisq = (2.0/len(sigmacp)) * np.sum((1.0 - np.cos(cphase-model_cphase))/(sigmacp**2))
         return cphase_chisq
 
     def vis_chisq(self,obs):
         if self.mode !='fixed':
             print("Can only compute chisqs to fixed model!")
             return
-
+        if self.modelim is None:
+            self.modelim = self.make_image(modelim=True)
         u = obs.data['u']
         v = obs.data['v']
         sigma = obs.data['sigma']  
@@ -890,7 +828,9 @@ class Bam:
         vis = obs.data['vis']
         sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
 
-        model_vis = self.vis_fixed(u,v)
+        uv = np.vstack([u,v]).T
+        model_vis = self.modelim_ivis(uv)
+        # model_vis = self.vis_fixed(u,v)
         absdelta = np.abs(model_vis-vis)
         vis_chisq = np.sum((absdelta/sd)**2)/(2*len(vis))
         return vis_chisq
@@ -899,15 +839,17 @@ class Bam:
         if self.mode !='fixed':
             print("Can only compute chisqs to fixed model!")
             return
-
+        if self.modelim is None:
+            self.modelim = self.make_image(modelim=True)
         u = obs.data['u']
         v = obs.data['v']
         sigma = obs.data['sigma']  
         amp = obs.unpack('amp')['amp']
         # vis = obs.data['vis']
         sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
-
-        model_amp = np.abs(self.vis_fixed(u,v))
+        uv = np.vstack([u,v]).T
+        model_amp = np.abs(self.modelim_ivis(uv))
+        # model_amp = np.abs(self.vis_fixed(u,v))
         absdelta = np.abs(model_amp-amp)
         amp_chisq = np.sum((absdelta/sd)**2)/(len(amp))
         return amp_chisq

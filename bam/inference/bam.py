@@ -123,7 +123,7 @@ def piecewise_better(rho, varphi, inc, nmax):
 
     cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])
     phivecs = [phivec]+[phivec+n*np.pi for n in range(1,nmax+1)]
-    alphavecs = [np.arccos(cosalphavec)]+[np.arcsin((-1)**n * np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+    alphavecs = [np.arccos(cosalphavec)]+[np.arcsin(np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
     for i in range(1,len(alphavecs)):
         alphavecs[i] = np.sign(alphavecs[i])*(np.pi-np.abs(alphavecs[i]))
     # alphavecs = [alphavecs[0]]*len(alphavecs)
@@ -258,12 +258,14 @@ class Bam:
             print("Using approxtype", approxtype)
         
 
-    def test(self, i):
+    def test(self, i, out):
         if len(i) == self.npix**2:
             i = i.reshape((self.npix, self.npix))
         plt.imshow(i)
         plt.colorbar()
-        plt.show()
+        plt.savefig(out+'.png',bbox_inches='tight')
+        plt.close('all')
+        # plt.show()
 
     def compute_image(self, imparams):
         """
@@ -381,23 +383,26 @@ class Bam:
             #     cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
             #     sinalpha =sqrt(1. - cosalpha**2)
                 
-            # self.test(psivec)
-            sinxi = sintheta * cosphi / sinpsi# * (-1)**n
+            sinxi = sintheta * cosphi / sinpsi
             cosxi = costheta / sinpsi
             # if n%2 == 1:
             #     sinxi = np.sin(np.pi-np.arcsin(sinxi))
             #     cosxi = np.cos(np.pi-np.arccos(cosxi))
 
-            # self.test(sinxi)
-            # self.test(cosxi)
+            
             kPthat = gfacinv
             kPxhat = cosalpha * gfacinv
             kPyhat = -sinxi * sinalpha * gfacinv
             kPzhat = cosxi * sinalpha * gfacinv# * (-1)**n
-            # self.test(kPthat)
-            # self.test(kPxhat)
-            # self.test(kPyhat)
-            # self.test(kPzhat)
+
+            # self.test(alphavec,'alpha'+str(n))
+            # self.test(psivec,'psi'+str(n))
+            # self.test(sinxi, 'sinxi'+str(n))
+            # self.test(cosxi, 'cosxi'+str(n))
+            # self.test(kPthat, 'kPthat'+str(n))
+            # self.test(kPxhat, 'kPxhat'+str(n))
+            # self.test(kPyhat, 'kPyhat'+str(n))
+            # self.test(kPzhat, 'kPzhat'+str(n))
             kFthat = gamma * (kPthat - betax * kPxhat - betay * kPyhat)
             kFxhat = -gamma * betax * kPthat + (1. + (gamma-1.) * coschi**2) * kPxhat + (gamma-1.) * coschi * sinchi * kPyhat
             kFyhat = -gamma * betay * kPthat + (gamma-1.) * sinchi * coschi * kPxhat + (1. + (gamma-1.) * sinchi**2) * kPyhat
@@ -438,7 +443,7 @@ class Bam:
             fFthat = 0.
             fFxhat = kcrossbx / (kFthat * bmag)
             fFyhat = kcrossby / (kFthat * bmag)
-            fFzhat = kcrossbz / (kFthat * bmag) * (-1)**n
+            fFzhat = kcrossbz / (kFthat * bmag)# * (-1)**n
             
             # fPthat = gamma * (fFthat + beta * fFyhat)
             # fPxhat = fFxhat
@@ -481,7 +486,7 @@ class Bam:
             ealpha = (ybeta * k2 - nu * k1) / den
             ebeta = (ybeta * k1 + nu * k2) / den
             if self.polflux:
-                qvec = -mag*(ealpha**2 - ebeta**2)
+                qvec = -mag*(ealpha**2 - ebeta**2) * (-1)**n
                 uvec = -mag*(2*ealpha*ebeta)
                 qvec[np.isnan(qvec)]=0
                 uvec[np.isnan(uvec)]=0

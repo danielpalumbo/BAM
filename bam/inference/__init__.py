@@ -1,1 +1,1 @@
-from . import model_helpers, bam
+from . import model_helpers, bam, jfuncs

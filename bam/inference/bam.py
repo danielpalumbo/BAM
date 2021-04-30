@@ -16,10 +16,6 @@ from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin
 # theano.config.compute_test_value = 'ignore'
 
 
-def example_jfunc(r, phi, jargs):
-    peak_r = jargs[0]
-    thickness = jargs[1]
-    return exp(-4.*log(2)*((r-peak_r)/thickness)**2)
 
 def get_uniform_transform(lower, upper):
     return lambda x: (upper-lower)*x + lower
@@ -38,69 +34,6 @@ def getrt(rho):
 def getpsit(rt):
     # rt = np.complex128(rt)
     return np.arccos(-2 / (rt-2))
-
-def test_better(rho, psi):
-    rt = getrt(rho)
-    psit = getpsit(rt)
-    rb1 = beloborodov_r(psit - np.sqrt((psit-psi)**2), rho)
-    return rb1
-
-def betterborodov_v1(rho, varphi, inc, nmax):
-    """
-    Given rho and varphi vecs, inclination, and nmax,
-    compute r and phi vecs for each n
-    """
-    phivecs = [getphi(varphi, inc, n).real for n in range(nmax+1)]
-    rt = getrt(rho)
-    psit = getpsit(rt)
-    # psivecs = [getpsin(inc, phivecs[n], n) for n in range(nmax+1)]
-    psivec = getpsin(inc, phivecs[0], 0)
-    psivecs = [psivec]+[psivec + n*np.pi for n in range(1, nmax+1)]
-    rvecs = [beloborodov_r(psit - np.sqrt((psit-psivecs[n])**2), rho).real for n in range(nmax+1)]
-    
-    signprvecs = [(np.abs(psivecs[n])<psit).astype(int) for n in range(nmax+1)]
-    for n in range(nmax+1):
-        signprvecs[n][np.abs(psivecs[n])<psit] = -1
-        signprvecs[n][rho <= np.sqrt(27)] = 1
-    arctannumvecs = [np.arctan(1/np.sqrt(rvecs[n]**2 / rho**2 / (1-2/rvecs[n])-1)) for n in range(nmax+1)]
-    alphavecs = [np.sign(psivecs[n]) * (np.pi-arctannumvecs[n]) for n in range(nmax+1)]
-    for n in range(nmax+1):
-        mask = (signprvecs[n]==1)*(0<psivecs[n])*(psivecs[n]<np.pi)
-        alphavecs[n][mask] = (np.sign(psivecs[n])*arctannumvecs[n])[mask]
-
-    return rvecs, phivecs, psivecs, alphavecs
-
-def beloborodov(rho, varphi, inc, nmax):
-    phivec = arctan2(sin(varphi),cos(varphi)*cos(inc))
-    # getpsin(theta, blphi, n):
-    psivecs = [getpsin(inc, phivec, n) for n in range(nmax+1)]
-
-    sinprod = sin(inc)*sin(phivec)
-    numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
-    denomenator = (-1.+sinprod)**2 * (1+sinprod)
-    sqq = sqrt(numerator/denomenator)
-    rvec = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
-
-    rvecs = [rvec]+[3.+(rvec-3)*np.exp(-np.pi*n) for n in range(1,nmax+1)]
-    # rvecs = [np.real(beloborodov_r(psivecs[n], rho)) for n in range(nmax+1)]
-    # cospsi = -sinprod#sin(inc) * sin(phivec)
-    # psivec = np.arccos(cospsi)
-    # sinpsi = sqrt(1. - cospsi**2)
-    # cospsivecs = [cos(psivec) for psivec in psivecs]
-    cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])# for n in range(nmax+1)]
-
-    # sinalpha =sqrt(1. - cosalpha**2)
-    # alphavec = np.arccos(cosalpha)
-    
-
-    # rvecs = [rvec]
-    phivecs = [phivec+n*np.pi for n in range(nmax+1)]
-    alphavecs = [np.arccos(cosalphavec)]+[np.arcsin((-1)**n * np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
-
-    # psivecs = [psivec]
-    # for n in range(1, nmax+1):
-    #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
-    return rvecs, phivecs, psivecs, alphavecs
 
 def piecewise_better(rho, varphi, inc, nmax):
     phivec = arctan2(sin(varphi), cos(varphi)*cos(inc))
@@ -126,11 +59,7 @@ def piecewise_better(rho, varphi, inc, nmax):
     alphavecs = [np.arccos(cosalphavec)]+[np.arcsin(np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
     for i in range(1,len(alphavecs)):
         alphavecs[i] = np.sign(alphavecs[i])*(np.pi-np.abs(alphavecs[i]))
-    # alphavecs = [alphavecs[0]]*len(alphavecs)
-    # print(alphavecs)
-    # psivecs = [psivec]
-    # for n in range(1, nmax+1):
-    #     rvecs[n][np.abs(rho-np.sqrt(27.))>1.] = 1.e6
+
     return rvecs, phivecs, psivecs, alphavecs
 
 def cphase_uvpairs(cphase_data):
@@ -293,7 +222,9 @@ class Bam:
             if self.approxtype == 'better':
                 rvecs, phivecs, psivecs, alphavecs = piecewise_better(rhovec, self.varphivec, inc, self.nmax)
             elif self.approxtype == 'belo':
-                rvecs, phivecs, psivecs, alphavecs = beloborodov(rhovec, self.varphivec, inc, self.nmax)
+                print("No! Use better!")
+                return
+                # rvecs, phivecs, psivecs, alphavecs = beloborodov(rhovec, self.varphivec, inc, self.nmax)
             # rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
 
         elif self.calctype == 'exact':
@@ -784,6 +715,10 @@ class Bam:
             im.pa = self.PA
         else:
             im = im.rotate(self.PA)
+            mask = im.ivec<0
+            im.ivec[mask]=0.
+            im.qvec[mask]=0.
+            im.uvec[mask]=0.
 
         # im.ivec *= self.tf / im.total_flux()
         return im

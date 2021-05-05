@@ -54,9 +54,15 @@ def piecewise_better(rho, varphi, inc, nmax):
     for vec in rvecs[1:]:
         vec[nosubim_mask] = np.nan
 
-    cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])
     phivecs = [phivec]+[phivec+n*np.pi for n in range(1,nmax+1)]
-    alphavecs = [np.arccos(cosalphavec)]+[np.arcsin(np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+
+    # cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])
+    # alphavecs = [np.arccos(cosalphavec)]+[np.arcsin(np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+    
+    cosalphavecs = [1. - (1. - cos(psivecs[i])) * (1. - 2./rvecs[i]) for i in range(nmax+1)]
+    alphavecs = [np.arccos(cosalphavec) for cosalphavec in cosalphavecs]#+[np.arcsin(np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
+    
+
     for i in range(1,len(alphavecs)):
         alphavecs[i] = np.sign(alphavecs[i])*(np.pi-np.abs(alphavecs[i]))
 
@@ -286,7 +292,7 @@ class Bam:
             #     plt.show()
             # cosalpha = cosalphas[n]
             # psi = psis[n]
-
+            # self.test(alphavec, out='alphavec'+str(n))
             gfac = sqrt(1. - 2./rvec)
             gfacinv = 1. / gfac
             gamma = 1. / sqrt(1. - beta**2)
@@ -324,7 +330,7 @@ class Bam:
             kPthat = gfacinv
             kPxhat = cosalpha * gfacinv
             kPyhat = -sinxi * sinalpha * gfacinv
-            kPzhat = cosxi * sinalpha * gfacinv# * (-1)**n
+            kPzhat = cosxi * sinalpha * gfacinv
 
             # self.test(alphavec,'alpha'+str(n))
             # self.test(psivec,'psi'+str(n))
@@ -340,6 +346,9 @@ class Bam:
             kFzhat = kPzhat
 
 
+            # kFzhat *= (-1)**n
+
+
             delta = 1. / kFthat
             
             # self.test(delta)
@@ -347,6 +356,14 @@ class Bam:
             kcrossbx = kFyhat * bz - kFzhat * by
             kcrossby = kFzhat * bx - kFxhat * bz
             kcrossbz = kFxhat * by - kFyhat * bx
+
+            # self.test(kcrossbx,out='kcrossbx'+str(n))
+            # self.test(kcrossby,out='kcrossby'+str(n))
+            # self.test(kcrossbz,out='kcrossbz'+str(n))
+
+            # kcrossbx *= (-1)**n
+            # kcrossby *= (-1)**n
+            # kcrossbz *= (-1)**n
 
             # polfac = np.sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
             sinzeta = sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
@@ -365,9 +382,10 @@ class Bam:
             #     intensity = polarizedintensity
             
                 
-            pathlength = kFthat/kFzhat
+            pathlength = np.abs(kFthat/kFzhat)
             mag = polarizedintensity*pathlength
-            
+            # self.test(pathlength, out='pathlength'+str(n))
+            # self.test(mag, out='mag'+str(n))
             # self.test(bmag)
             # self.test(kFthat)
 
@@ -406,7 +424,7 @@ class Bam:
             radical = sqrt(radicand)
             # plt.imshow(radicand)
             # plt.show()
-            kOlth = rvec * radical * np.sign(sinphi)
+            kOlth = rvec * radical * np.sign(sinphi) * (-1)**n
             #sinphi / (sqrt(sinphi**2)+1.e-10)
 
             xalpha = -kOlp / sintheta
@@ -417,7 +435,7 @@ class Bam:
             ealpha = (ybeta * k2 - nu * k1) / den
             ebeta = (ybeta * k1 + nu * k2) / den
             if self.polflux:
-                qvec = -mag*(ealpha**2 - ebeta**2) * (-1)**n
+                qvec = -mag*(ealpha**2 - ebeta**2)# * (-1)**n
                 uvec = -mag*(2*ealpha*ebeta)
                 qvec[np.isnan(qvec)]=0
                 uvec[np.isnan(uvec)]=0
@@ -427,6 +445,7 @@ class Bam:
                 ivec[np.isnan(ivec)] = 0
                 qvec = 0*ivec
                 uvec = 0*ivec
+            # self.test(ivec, 'ivec'+str(n))
 
             qvecs.append(qvec)
             uvecs.append(uvec)

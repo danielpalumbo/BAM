@@ -33,7 +33,7 @@ def gettau(b, varphi, n, theta):
 
 
 #closed form expression for rs as a function of screen coords (to be inverted)
-def getradroots(b, theta): #note!!! this needs to take the G+L roots for kerr and *then* set a=0 (else everything complex conjugated)
+def getradroots(b): #note!!! this needs to take the G+L roots for kerr and *then* set a=0 (else everything complex conjugated)
     fac1 = (-b**6 + 6*b**4 * (9 + np.sqrt(81-3*b**2 + 0j)))**(1/3)
     xi = (b**2 + fac1)**2 / 6 / fac1
     z0 = (xi / 2)**(1/2)
@@ -130,8 +130,8 @@ def getpsin(theta, blphi, n):
 
 
 #gets psit as a function of b
-def getpsit(b, theta):
-    r1, r3, r4 = getradroots(b, theta)
+def getpsit(b):
+    r1, r3, r4 = getradroots(b)
     r31 = r3 - r1
     r41 = r4 - r1
     k = r3 * r41 / r31 / r4

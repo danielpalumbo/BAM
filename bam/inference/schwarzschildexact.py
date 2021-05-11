@@ -52,7 +52,7 @@ def rinvert(b, varphi, n, theta):
     tau = gettau(b, varphi, n, theta)
     bratio = np.complex128(np.sqrt(27) / b)
     rootfac = -bratio + np.sqrt(-1 + bratio**2)
-    r1, r3, r4 = getradroots(b, theta)
+    r1, r3, r4 = getradroots(b)
     r31 = r3 - r1
     r41 = r4 - r1
     k = r3 * r41 / r31 / r4
@@ -145,10 +145,10 @@ def getpsit(b):
 
 
 #next, need sign(p^r) at the emission radius to determine if ray hits turning point
-def getsignpr(b, r, theta, psin):
+def getsignpr(b, psin):
     # if b <= np.sqrt(27):
     #     return 1
-    psit = getpsit(b, theta)
+    psit = getpsit(b)
     out = (np.abs(psin) < psit).astype(int)
     out[np.abs(psin)<psit] = -1
     out[b <= np.sqrt(27)]=1
@@ -161,7 +161,7 @@ def getsignpr(b, r, theta, psin):
 
 #now compute alpha_n
 def getalphan(b, r, theta, psin):
-    signpr = getsignpr(b, r, theta, psin)
+    signpr = getsignpr(b, psin)
     arctannum = np.arctan(1 / np.sqrt(r**2/b**2/(1-2/r)-1))
     signpsin = np.sign(psin)
     out = signpsin * (np.pi-arctannum)

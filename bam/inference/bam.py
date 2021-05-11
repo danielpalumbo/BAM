@@ -238,7 +238,7 @@ class Bam:
             rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
             phivecs = [getphi(self.varphivec, inc, n) for n in range(self.nmax+1)]
             psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
-            alphavecs = [getalphan(rhovec, rvecs[n], inc, psis[n]) for n in range(self.nmax+1)]
+            alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
             # cosalphas = [np.cos(alpha) for alpha in alphas]
         # if len(rvecs)>1:
         #     self.test(rvecs[1])

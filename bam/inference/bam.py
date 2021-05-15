@@ -9,7 +9,7 @@ from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
-from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin
+from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin, exact
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # theano.config.exception_verbosity='high'
@@ -194,6 +194,7 @@ class Bam:
         
 
     def test(self, i, out):
+        plt.close('all')
         if len(i) == self.npix**2:
             i = i.reshape((self.npix, self.npix))
         plt.imshow(i)
@@ -234,11 +235,16 @@ class Bam:
             # rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
 
         elif self.calctype == 'exact':
-            
-            rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
-            phivecs = [getphi(self.varphivec, inc, n) for n in range(self.nmax+1)]
-            psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
-            alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
+            rvecs, phivecs, psivecs, alphavecs = exact(rhovec, self.varphivec, inc, self.nmax)
+            for n in range(self.nmax+1):
+                self.test(rvecs[n],out='rvec'+str(n))
+                self.test(phivecs[n],out='phivec'+str(n))
+                self.test(psivecs[n],out='psivec'+str(n))
+                self.test(alphavecs[n],out='alphavec'+str(n))
+            # rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
+            # phivecs = [getphi(self.varphivec, inc, n) for n in range(self.nmax+1)]
+            # psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
+            # alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
             # cosalphas = [np.cos(alpha) for alpha in alphas]
         # if len(rvecs)>1:
         #     self.test(rvecs[1])
@@ -275,8 +281,8 @@ class Bam:
         uvecs = []        
 
         for n in range(self.nmax+1):
-            # rvec = np.maximum(rvecs[n],2.0001)
-            rvec = rvecs[n]
+            rvec = np.maximum(rvecs[n],2.0001)
+            # rvec = rvecs[n]
             phivec = phivecs[n]
             # print(phivec)
             psivec = psivecs[n]
@@ -287,6 +293,8 @@ class Bam:
             sinpsi = np.sin(psivec)
             cosalpha = np.cos(alphavec)
             sinalpha = np.sin(alphavec)
+
+            # self.test(rvec,out='rvec'+str(n))
             # if n == 1:
             #     plt.imshow(rvec.reshape((self.npix, self.npix)))
             #     plt.show()

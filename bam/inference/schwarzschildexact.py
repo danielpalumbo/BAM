@@ -165,8 +165,8 @@ def getalphan(b, r, theta, psin):
     arctannum = np.arctan(1 / np.sqrt(r**2/b**2/(1-2/r)-1))
     signpsin = np.sign(psin)
     out = signpsin * (np.pi-arctannum)
-    mask = (signpr == 1)*(0<psin)*(psin<np.pi)
-    out[mask] = (signpsin*arctannum)[mask]
+    # mask = (signpr == 1)*(0<psin)*(psin<np.pi)
+    # out[mask] = (signpsin*arctannum)[mask]
     return out
 
     # if signpr == 1 or (0<psin<np.pi):
@@ -199,3 +199,56 @@ def getwindangle(b, r, blphi, theta, n):
 
 # if __name__=="__main__":
 #     main()
+
+def exact(rhovec, varphivec, inc, nmax):
+    b = rhovec
+    varphivec[varphivec==0.]+=1e-5
+    varphi = varphivec
+    theta = inc
+    rvecs = []
+    for n in range(nmax+1):
+        tau = gettau(b, varphi, n, theta)
+        bratio = np.complex128(np.sqrt(27) / b)
+        rootfac = -bratio + np.sqrt(-1 + bratio**2)
+        r1, r3, r4 = getradroots(b)
+        r31 = r3 - r1
+        r41 = r4 - r1
+        k = r3 * r41 / r31 / r4
+        ffac = 1 / 2 * (r31 * r4)**(1/2)
+        fobs = np.complex128(ef(np.arcsin(np.sqrt(r31/r41)), k))
+        snnum = r41*(np.complex128(sn('sn', ffac * tau - fobs, k)))**2
+        rvecs.append(np.real((r4 * r31 - r3 * snnum) / (r31 - snnum)))
+
+    phivecs = [getphi(varphivec, inc, n) for n in range(nmax+1)]
+
+    # rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
+    psivec = getpsin(inc, phivecs[0], 0)
+    psivecs = [psivec + n*np.pi for n in range(nmax+1)]
+    # psivecs = [getpsin(inc, phivecs[0], 0) for n in range(nmax+1)]
+
+    alphavecs = []
+    psit = getpsit(b)
+    # plt.imshow(2*psit.reshape(int(np.sqrt(len(psit))),int(np.sqrt(len(psit)))))
+    # plt.show()
+    for n in range(nmax+1):
+        # signpr = getsignpr(b, psin)
+        r = rvecs[n]
+        # psin = getpsin(theta, phivecs[n],n)
+        psin = psivecs[n]
+        if n > 0:
+            nosubim_mask = 2*psit < psivecs[0]+np.pi
+            rvecs[n][nosubim_mask] = np.nan
+        out = (np.abs(psin) < psit).astype(int)
+        out[np.abs(psin)<psit] = -1
+        out[b <= np.sqrt(27)]=1
+        signpr = out
+
+        arctannum = np.arctan(1 / np.sqrt(r**2/b**2/(1-2/r)-1))
+        signpsin = np.sign(psin)
+        out = signpsin * arctannum#(np.pi-arctannum)
+        # mask = (signpr == 1)*(0<psin)*(psin<np.pi)
+        # out[mask] = (signpsin*arctannum)[mask]
+        alphavecs.append(out)
+    # return out
+    # alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
+    return rvecs, phivecs, psivecs, alphavecs

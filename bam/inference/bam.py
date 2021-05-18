@@ -659,8 +659,8 @@ class Bam:
             plt.close('all')
 
 
-    def cornerplot(self, save='',show=True):
-        fig, axes = dyplot.cornerplot(self.recent_results, labels=self.modeled_names)
+    def cornerplot(self, save='',show=True, truths=None):
+        fig, axes = dyplot.cornerplot(self.recent_results, labels=self.modeled_names, truths=truths)
         if len(save)>0:
             plt.savefig(save,bbox_inches='tight')
         if show:

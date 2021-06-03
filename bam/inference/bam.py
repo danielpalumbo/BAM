@@ -9,6 +9,7 @@ from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
+from scipy.optimize import dual_annealing
 from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin, exact
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
@@ -600,6 +601,29 @@ class Bam:
         print("Built combined likelihood function!")
         return loglike
 
+    def annealing_MAP(self, obs, data_types=['vis'], ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0):
+        """
+        Given an observation and a list of data product names, 
+        find the MAP using scipy's dual annealing.
+        """
+        self.source = obs.source
+        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)
+        ll = self.build_likelihood(obs, data_types=data_types,ttype=ttype)
+        
+
+        res =  dual_annealing(lambda x: -ll(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)
+        
+        to_eval = []
+        for name in self.all_names:
+            if not(name in self.modeled_names):
+                to_eval.append(self.all_params[self.all_names.index(name)])
+            else:
+                to_eval.append(res.x[self.modeled_names.index(name)])
+        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new.modelim = new.make_image(modelim=True)
+        return new
+        
+
     def build_prior_transform(self):
         functions = [get_uniform_transform(bounds[0],bounds[1]) for bounds in self.modeled_params]
 
@@ -720,7 +744,7 @@ class Bam:
         """
 
         if self.mode == 'model':
-            print("Cannot directly make images in model mode! Call sample_blimage or MAP_blimage and display that!")
+            print("Cannot directly make images in model mode!")
             return
         # imparams = self.all_params[:9] + [self.all_params[11:]]
         # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)

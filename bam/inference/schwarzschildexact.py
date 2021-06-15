@@ -6,6 +6,8 @@ import scipy.optimize as op
 import mpmath as mp
 import matplotlib.pyplot as plt
 from scipy.interpolate import RectBivariateSpline, interp1d, interp2d
+from scipy.integrate import quad_vec
+import scipy.interpolate as si
 
 
 #define elliptic functions (need the mpmath version to take complex args)
@@ -63,10 +65,10 @@ def rinvert(b, varphi, n, theta):
     rs = np.real((r4 * r31 - r3 * snnum) / (r31 - snnum))
     return rs
 
-def r_from_rho_and_tau(b, tau):
+def r_from_rho_and_tau(b, tau, r1, r3, r4):
     # bratio = np.complex128(np.sqrt(27) / b)
     # rootfac = -bratio + np.sqrt(-1 + bratio**2)
-    r1, r3, r4 = getradroots(b)
+    # r1, r3, r4 = getradroots(b)
     r31 = r3 - r1
     r41 = r4 - r1
     k = r3 * r41 / r31 / r4
@@ -75,6 +77,18 @@ def r_from_rho_and_tau(b, tau):
     snnum = r41*(np.complex128(sn('sn', ffac * tau - fobs, k)))**2
     rs = np.real((r4 * r31 - r3 * snnum) / (r31 - snnum))
     return rs    
+
+def gettautot(b, r1, r3, r4):
+    # r1, r3, r4 = getradroots(b) #get radial roots - r4 will be complex if inside crit curve (which is fine)
+
+    ifacout = lambda r: np.abs(1/np.sqrt(r*(r-r1)*(r-r3)))
+    iintout = lambda u: ifacout(u**2+r4)
+    irtotout = 4*quad_vec(iintout, 0, np.inf)[0] #outside crit curve - needs change of variables to make sure integrand doesn't explode
+
+    iintin = lambda r: 1/np.sqrt(r**4-r*(r-2)*b**2)
+    irtotin = 2*quad_vec(iintin, 2, np.inf)[0] #inside crit curve - no change of variables necessary since denom has no roots
+
+    return np.nan_to_num((b<np.sqrt(27))*irtotin,nan=0) + np.nan_to_num((b>np.sqrt(27))*irtotout,nan=0)
 
 
 # #screen impact param is the root of this equation
@@ -145,8 +159,8 @@ def getpsin(theta, blphi, n):
 
 
 #gets psit as a function of b
-def getpsit(b):
-    r1, r3, r4 = getradroots(b)
+def getpsit(b, r1, r3, r4):
+    # r1, r3, r4 = getradroots(b)
     r31 = r3 - r1
     r41 = r4 - r1
     k = r3 * r41 / r31 / r4
@@ -197,23 +211,55 @@ def getwindangle(b, r, blphi, theta, n):
     return (psin - alphan)
 
 
-def build_psit_interpolator(rho_interp):
-    #compute exact psit these rhos
-    exact_psit = getpsit(rho_interp)
+# def build_psit_interpolator(rho_interp):
+#     #compute exact psit these rhos
+#     exact_psit = getpsit(rho_interp)
 
-    #build interpolator
-    eint = interp1d(rho_interp,exact_psit)
-    return eint    
+#     #build interpolator
+#     eint = interp1d(rho_interp,exact_psit)
+#     return eint    
 
 
-def build_r_interpolator(rho_interp,tau_interp):
-    rv, tv = np.meshgrid(rho_interp, tau_interp)
-    #compute exact r
-    exact_r = r_from_rho_and_tau(rv, tv)
-    eint = RectBivariateSpline(rho_interp, tau_interp, exact_r)
-    # eint = interp2d(rv, tv, exact_r)
-    return eint
+# def build_r_interpolator(rho_interp,tau_interp):
+#     rv, tv = np.meshgrid(rho_interp, tau_interp)
+#     #compute exact r
+#     exact_r = r_from_rho_and_tau(rv, tv)
+#     eint = RectBivariateSpline(rho_interp, tau_interp, exact_r)
+#     # eint = interp2d(rv, tv, exact_r)
+#     return eint
 
+def build_all_interpolators(rho_interp):
+    """
+    Given a set of rho values, 
+    buid reasonable interpolators for radius, total Mino time, and psit.
+
+    The root finding is done only once.
+    """
+    nrho = len(rho_interp)
+    r1, r3, r4 = getradroots(rho_interp)
+
+
+    psit = getpsit(rho_interp, r1, r3, r4) #note: contains imaginary components for b < sqrt(27)
+    psit_interpolator = interp1d(rho_interp, np.real(psit), bounds_error=False, fill_value='extrapolate')
+
+    tautot = gettautot(rho_interp, r1, r3, r4)
+    max_tau = np.max(tautot)
+    tau_interp = np.linspace(0.05,max_tau,nrho) 
+    tautot_interpolator = interp1d(rho_interp, tautot, bounds_error=False, fill_value='extrapolate')
+
+    rr, tt = np.meshgrid(rho_interp, tau_interp)
+    r11, tt = np.meshgrid(r1, tau_interp)
+    r33, tt = np.meshgrid(r3, tau_interp)
+    r44, tt = np.meshgrid(r4, tau_interp)
+    r = r_from_rho_and_tau(rr, tt, r11, r33, r44)
+    r[r<0] = 0
+    r[r>5*rho_interp[-1]]=5*rho_interp[-1]
+    # r_interpolator = RectBivariateSpline(tau_interp, rho_interp, r)
+    r_int = interp2d(rho_interp, tau_interp, r, bounds_error=False, fill_value=0)
+
+    r_interpolator = lambda x, y: si.dfitpack.bispeu(r_int.tck[0], r_int.tck[1], r_int.tck[2], r_int.tck[3], r_int.tck[4], x, y)[0]
+
+    return r_interpolator, tautot_interpolator, psit_interpolator
 
 def exact(rhovec, varphivec, inc, nmax):
     b = rhovec
@@ -270,58 +316,63 @@ def exact(rhovec, varphivec, inc, nmax):
 
 
 
-npix = 160
-pxi = (np.arange(npix)-0.01)/npix-0.5
-pxj = np.arange(npix)/npix-0.5
-# get angles measured north of west
-PXI,PXJ = np.meshgrid(pxi,pxj)
-varphi = np.arctan2(-PXJ,PXI)+1e-15# - np.pi/2
-# self.varphivec = varphi.flatten()
+
+
+# def interpolative_exact(rhovec, varphivec, inc, nmax, r_interpolator, tautot_interpolator, psit_interpolator)
+
+
+# npix = 160
+# pxi = (np.arange(npix)-0.01)/npix-0.5
+# pxj = np.arange(npix)/npix-0.5
+# # get angles measured north of west
+# PXI,PXJ = np.meshgrid(pxi,pxj)
+# varphi = np.arctan2(-PXJ,PXI)+1e-15# - np.pi/2
+# # self.varphivec = varphi.flatten()
 
 
 
-#get grid of angular radii
-fov = 12
-mui = pxi*fov
-muj = pxj*fov
-MUI,MUJ = np.meshgrid(mui,muj)
-rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
+# #get grid of angular radii
+# fov = 12
+# mui = pxi*fov
+# muj = pxj*fov
+# MUI,MUJ = np.meshgrid(mui,muj)
+# rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
 
 
-# rho_interp = np.linspace(1e-5, 10, 100)
-# varphi = 1e-5*np.ones_like(rho_interp)
-n = 1
-theta = 1e-5
+# # rho_interp = np.linspace(1e-5, 10, 100)
+# # varphi = 1e-5*np.ones_like(rho_interp)
+# n = 1
+# theta = 1e-5
 
-tau = gettau(rho, varphi, n, theta)
-tau = np.minimum(tau,10*(n*np.pi+np.pi/2))# = 10*np.median(tau)
-exact_r = r_from_rho_and_tau(rho, tau)
+# tau = gettau(rho, varphi, n, theta)
+# tau = np.minimum(tau,10*(n*np.pi+np.pi/2))# = 10*np.median(tau)
+# exact_r = r_from_rho_and_tau(rho, tau)
 
-plt.imshow(tau,extent=[-fov/2,fov/2,-fov/2,fov/2])
-plt.xlabel('alpha')
-plt.ylabel('beta')
-plt.title('n = '+str(n)+' Mino time')
-plt.colorbar()
-plt.show()
+# plt.imshow(tau,extent=[-fov/2,fov/2,-fov/2,fov/2])
+# plt.xlabel('alpha')
+# plt.ylabel('beta')
+# plt.title('n = '+str(n)+' Mino time')
+# plt.colorbar()
+# plt.show()
 
-exact_r[exact_r<0]=0
-exact_r[exact_r>10]=10
-plt.imshow(exact_r,extent=[-fov/2,fov/2,-fov/2,fov/2])
-plt.xlabel('alpha')
-plt.ylabel('beta')
-plt.title('n = '+str(n)+' radius')
-plt.colorbar()
-plt.show()
+# exact_r[exact_r<0]=0
+# exact_r[exact_r>10]=10
+# plt.imshow(exact_r,extent=[-fov/2,fov/2,-fov/2,fov/2])
+# plt.xlabel('alpha')
+# plt.ylabel('beta')
+# plt.title('n = '+str(n)+' radius')
+# plt.colorbar()
+# plt.show()
 
-binmap = exact_r.copy()
-binmap[binmap<0]=-1
-binmap[binmap>0]=1
-plt.imshow(binmap,extent=[-fov/2,fov/2,-fov/2,fov/2])
-plt.xlabel('alpha')
-plt.ylabel('beta')
-plt.title('n = '+str(n)+' sign(radius)')
-plt.colorbar()
-plt.show()
+# binmap = exact_r.copy()
+# binmap[binmap<0]=-1
+# binmap[binmap>0]=1
+# plt.imshow(binmap,extent=[-fov/2,fov/2,-fov/2,fov/2])
+# plt.xlabel('alpha')
+# plt.ylabel('beta')
+# plt.title('n = '+str(n)+' sign(radius)')
+# plt.colorbar()
+# plt.show()
 
 
 # tau_interp = np.linspace(1e-5, 10, 100)

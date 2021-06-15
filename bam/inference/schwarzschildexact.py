@@ -5,6 +5,7 @@ import numpy as np
 import scipy.optimize as op
 import mpmath as mp
 import matplotlib.pyplot as plt
+from scipy.interpolate import RectBivariateSpline, interp1d, interp2d
 
 
 #define elliptic functions (need the mpmath version to take complex args)
@@ -26,10 +27,10 @@ def gettau(b, varphi, n, theta):
     m = n*np.ones_like(varphi)
     m[np.sin(varphi)>0] = n+1
     # m = n if np.sin(varphi)<0 else n+1
-    sinphi = np.ones_like(varphi)
-    sinphi[np.sin(varphi)<0] = -1
+    signphi = np.ones_like(varphi)
+    signphi[np.sin(varphi)<0] = -1
     # sinphi = 1 if np.sin(varphi) >= 0 else -1 #just need to be consistent about defining sinvarphi\geq 0 together
-    return 1/b * (np.pi * m - sinphi*np.arcsin(np.cos(theta) / np.sqrt(np.cos(theta)**2 * np.cos(varphi)**2 + np.sin(varphi)**2)))
+    return 1/b * (np.pi * m - signphi*np.arcsin(np.cos(theta) / np.sqrt(np.cos(theta)**2 * np.cos(varphi)**2 + np.sin(varphi)**2)))
 
 
 #closed form expression for rs as a function of screen coords (to be inverted)
@@ -61,6 +62,20 @@ def rinvert(b, varphi, n, theta):
     snnum = r41*(np.complex128(sn('sn', ffac * tau - fobs, k)))**2
     rs = np.real((r4 * r31 - r3 * snnum) / (r31 - snnum))
     return rs
+
+def r_from_rho_and_tau(b, tau):
+    # bratio = np.complex128(np.sqrt(27) / b)
+    # rootfac = -bratio + np.sqrt(-1 + bratio**2)
+    r1, r3, r4 = getradroots(b)
+    r31 = r3 - r1
+    r41 = r4 - r1
+    k = r3 * r41 / r31 / r4
+    ffac = 1 / 2 * (r31 * r4)**(1/2)
+    fobs = np.complex128(ef(np.arcsin(np.sqrt(r31/r41)), k))
+    snnum = r41*(np.complex128(sn('sn', ffac * tau - fobs, k)))**2
+    rs = np.real((r4 * r31 - r3 * snnum) / (r31 - snnum))
+    return rs    
+
 
 # #screen impact param is the root of this equation
 # def geodesiceq(b):
@@ -138,7 +153,7 @@ def getpsit(b):
     argx2 = r31  / r41
     x2 = np.arcsin(np.sqrt(argx2))
     prefac = 2 * b / np.sqrt(r31 * r4)
-    psit = np.abs(prefac * np.complex128(ef(x2, k)))
+    psit = prefac * np.complex128(ef(x2, k))
     return psit
 
 
@@ -180,25 +195,25 @@ def getwindangle(b, r, blphi, theta, n):
     psin = getpsin(theta, blphi, n)
     alphan = getalphan(b, r, theta, psin)
     return (psin - alphan)
-# def main():
-#     global listerr;
-#     listerr=[]
 
-#     theta = 89*np.pi/180
-#     rvals = np.arange(2.8, 3.5, .01)
-#     varphi = -np.pi/2
-#     n = 1
-# #    blphivals = np.linspace(0, 2*np.pi, 50)
-#     varphivals = getvarphi(blphivals, theta, n)
-#     bvals = findb
-# #    bvals = np.array([getscreencoords(r, blphi, theta, n)[0] for blphi in blphivals])
-#     psinvals = [getpsin(theta, blphi, n) for blphi in blphivals]
-#     signvals = [getsignpr(bvals[i], r, theta, psinvals[i]) for i in range(len(blphivals))]
-#     for i in range(len(signvals)):
-#         print('varphi: {}, sign: {}'.format(np.sin(varphivals[i]), signvals[i]))
 
-# if __name__=="__main__":
-#     main()
+def build_psit_interpolator(rho_interp):
+    #compute exact psit these rhos
+    exact_psit = getpsit(rho_interp)
+
+    #build interpolator
+    eint = interp1d(rho_interp,exact_psit)
+    return eint    
+
+
+def build_r_interpolator(rho_interp,tau_interp):
+    rv, tv = np.meshgrid(rho_interp, tau_interp)
+    #compute exact r
+    exact_r = r_from_rho_and_tau(rv, tv)
+    eint = RectBivariateSpline(rho_interp, tau_interp, exact_r)
+    # eint = interp2d(rv, tv, exact_r)
+    return eint
+
 
 def exact(rhovec, varphivec, inc, nmax):
     b = rhovec
@@ -252,3 +267,90 @@ def exact(rhovec, varphivec, inc, nmax):
     # return out
     # alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
     return rvecs, phivecs, psivecs, alphavecs
+
+
+
+npix = 160
+pxi = (np.arange(npix)-0.01)/npix-0.5
+pxj = np.arange(npix)/npix-0.5
+# get angles measured north of west
+PXI,PXJ = np.meshgrid(pxi,pxj)
+varphi = np.arctan2(-PXJ,PXI)+1e-15# - np.pi/2
+# self.varphivec = varphi.flatten()
+
+
+
+#get grid of angular radii
+fov = 12
+mui = pxi*fov
+muj = pxj*fov
+MUI,MUJ = np.meshgrid(mui,muj)
+rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
+
+
+# rho_interp = np.linspace(1e-5, 10, 100)
+# varphi = 1e-5*np.ones_like(rho_interp)
+n = 1
+theta = 1e-5
+
+tau = gettau(rho, varphi, n, theta)
+tau = np.minimum(tau,10*(n*np.pi+np.pi/2))# = 10*np.median(tau)
+exact_r = r_from_rho_and_tau(rho, tau)
+
+plt.imshow(tau,extent=[-fov/2,fov/2,-fov/2,fov/2])
+plt.xlabel('alpha')
+plt.ylabel('beta')
+plt.title('n = '+str(n)+' Mino time')
+plt.colorbar()
+plt.show()
+
+exact_r[exact_r<0]=0
+exact_r[exact_r>10]=10
+plt.imshow(exact_r,extent=[-fov/2,fov/2,-fov/2,fov/2])
+plt.xlabel('alpha')
+plt.ylabel('beta')
+plt.title('n = '+str(n)+' radius')
+plt.colorbar()
+plt.show()
+
+binmap = exact_r.copy()
+binmap[binmap<0]=-1
+binmap[binmap>0]=1
+plt.imshow(binmap,extent=[-fov/2,fov/2,-fov/2,fov/2])
+plt.xlabel('alpha')
+plt.ylabel('beta')
+plt.title('n = '+str(n)+' sign(radius)')
+plt.colorbar()
+plt.show()
+
+
+# tau_interp = np.linspace(1e-5, 10, 100)
+
+# rv, tv = np.meshgrid(rho_interp, tau_interp)
+# exact_r = r_from_rho_and_tau(rv, tv)
+
+
+# # eint = build_r_interpolator(rho_interp, tau_interp)
+
+# exact_r[exact_r<0]=0.
+# exact_r[exact_r>10*np.max(rho_interp)] = 10*np.max(rho_interp)
+# eint = RectBivariateSpline(rho_interp, tau_interp, exact_r)
+
+# eint(5, 0.314)
+
+
+# eint(np.array([5,6]),np.array([0.314, 0.414]))
+
+
+# import time
+# test_rhos = np.linspace(2,8,200**2)
+# test_taus = np.linspace(0.01, 5, 200**2)
+
+# s = time.time()
+# for i in range(10):
+#     eint(test_rhos, test_taus)
+# e = time.time()
+# print((e-s)/10)
+
+
+

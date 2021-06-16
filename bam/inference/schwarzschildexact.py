@@ -281,8 +281,6 @@ def exact(rhovec, varphivec, inc, nmax):
         rvecs.append(np.real((r4 * r31 - r3 * snnum) / (r31 - snnum)))
 
     phivecs = [getphi(varphivec, inc, n) for n in range(nmax+1)]
-
-    # rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
     psivec = getpsin(inc, phivecs[0], 0)
     psivecs = [psivec + n*np.pi for n in range(nmax+1)]
     # psivecs = [getpsin(inc, phivecs[0], 0) for n in range(nmax+1)]
@@ -315,10 +313,51 @@ def exact(rhovec, varphivec, inc, nmax):
     return rvecs, phivecs, psivecs, alphavecs
 
 
+def interpolative_exact(rhovec, varphivec, inc, nmax, r_interpolator, tautot_interpolator, psit_interpolator):
+    """
+    Given 1d (flattened image) arrays of rho and varphi
+    as well as inclination and the maximum n,
+    compute vectors of r, phi, psi and alpha
+    using interpolated values of r, total Mino time, psit.
+    """
+    rvecs = []
+
+    for n in range(nmax+1):
+        tau = gettau(rhovec, varphivec, n, inc)
+        tautot = tautot_interpolator(rhovec)
+        tau[tau>tautot]=np.nan
+        rvecs.append(r_interpolator(rhovec, tau))
+
+
+    phivecs = [getphi(varphivec, inc, n) for n in range(nmax+1)]
+    psivec = getpsin(inc, phivecs[0], 0)
+    psivecs = [psivec + n*np.pi for n in range(nmax+1)]
+    alphavecs = []
+    psit_interpolator(rhovec)
+    for n in range(nmax+1):
+        r = rvecs[n]
+        psin = psivecs[n]
+        if n > 0:
+            nosubim_mask = 2*psit < psivecs[0]+np.pi
+            rvecs[n][nosubim_mask] = np.nan
+        out = (np.abs(psin) < psit).astype(int)
+        out[np.abs(psin)<psit] = -1
+        out[rhovec <= np.sqrt(27)]=1
+        signpr = out
+
+        arctannum = np.arctan(1 / np.sqrt(r**2/b**2/(1-2/r)-1))
+        signpsin = np.sign(psin)
+        out = signpsin * arctannum#(np.pi-arctannum)
+        # mask = (signpr == 1)*(0<psin)*(psin<np.pi)
+        # out[mask] = (signpsin*arctannum)[mask]
+        alphavecs.append(out)
+    # return out
+    # alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
+    return rvecs, phivecs, psivecs, alphavecs
 
 
 
-# def interpolative_exact(rhovec, varphivec, inc, nmax, r_interpolator, tautot_interpolator, psit_interpolator)
+
 
 
 # npix = 160

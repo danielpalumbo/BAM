@@ -10,7 +10,7 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
-from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin, exact
+from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin, exact, interpolative_exact, build_all_interpolators
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # theano.config.exception_verbosity='high'
@@ -103,12 +103,16 @@ class Bam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', exacttype='interp',r_interp=None,tautot_interp=None,psit_interp=None, Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
         self.periodic=periodic
         self.dynamic=False
         self.source = source
         self.polflux = polflux
         self.approxtype = approxtype
+        self.exacttype = exacttype
+        self.r_interp = r_interp
+        self.tautot_interp = tautot_interp
+        self.psit_interp = psit_interp
         self.fov = fov
         self.npix = npix
         self.recent_sampler = None
@@ -137,6 +141,7 @@ class Bam:
         # get angles measured north of west
         PXI,PXJ = np.meshgrid(pxi,pxj)
         varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
+        varphi[varphi==0]=np.min(varphi[varphi>0])/1e2
         self.varphivec = varphi.flatten()
         
         #get grid of angular radii
@@ -192,7 +197,62 @@ class Bam:
 
         if self.calctype == 'approx':  
             print("Using approxtype", approxtype)
-        
+        elif self.calctype == 'exact':
+            print("Using exacttype", exacttype)
+            if self.exacttype=='interp':
+                if r_interp is None:
+                    print("No radius interpolator specified!")
+                elif r_
+                if tautot_interp is None:
+                    print("No Mino time interpolator specified!")
+                if psit_interp is None:
+                    print ("No turning point psi interpolator specified!")
+
+    def guess_new_interpolators(self):
+        """
+        Given known model parameters or prior ranges,
+        specify a reasonable range of rho values and compute
+        new interpolators.
+        """
+        if self.mode == 'fixed':
+            fov_m = self.fov / (Gpercsq*self.M*self.Mscale / self.D)
+            rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)
+  
+        if self.mode == 'model':
+            if isiterable(self.M) and not(isiterable(self.D)):
+                fov_m_max = self.fov / (Gpercsq*self.M[-1]*self.Mscale / self.D)
+                fov_m_min = self.fov / (Gpercsq*self.M[0]*self.Mscale / self.D)
+                if fov_m_in/self.npix/2 < np.sqrt(27) and fov_m_max/2 > np.sqrt(27):
+                    print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
+                    rho_interp = np.hstack([np.linspace(fov_m_min/self.npix/2,5.1,self.npix//2), np.linspace(5.1,5.3,self.npix//2), np.linspace(5.3,fov_m_max/2,self.npix//2)])
+            elif not(isiterable(self.M)) and not(isiterable(self.D)):
+                fov_m = self.fov / (Gpercsq*self.M*self.Mscale / self.D)
+                rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)
+            else:
+                print("Guessing interpolators is not supported for this combination of unspecified mass and distance.")
+                return
+
+        r_interp, tautot_interp, psit_interp = build_all_interpolators(rho_interp)
+        self.r_inter = r_interp
+        self.tautot_interp = tautot_interp
+        self.psit_interp = psit_interp
+        print("Assigned new r, tautot, and psit interpolators.")
+                            
+    def save_interpolators(self, outname=''):
+        with open(outname+'r_interpolator.pkl','wb') as myfile:
+            pkl.dump(self.r_interp, myfile)
+        with open(outname+'tautot_interpolator.pkl','wb') as myfile:
+            pkl.dump(self.tautot_interp, myfile)
+        with open(outname+'psit_interpolator.pkl','wb') as myfile:
+            pkl.dump(self.psit_interp, myfile)
+
+    def load_interpolators(self, r_interp_fname, tautot_interp_fname, psit_interp_fname):
+        with open(r_interp_fname,'rb') as myfile:
+            self.r_interp = pkl.load(myfile)
+        with open(tautot_interp_fname,'rb') as myfile:
+            self.tautot_interp = pkl.load(myfile)
+        with open(psit_interp_fname,'rb') as myfile:
+            self.psit_interp = pkl.load(myfile)
 
     def test(self, i, out):
         plt.close('all')
@@ -236,6 +296,8 @@ class Bam:
             # rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
 
         elif self.calctype == 'exact':
+            if self.exacttype == 'interp':
+                rvecs, phivecs, psivecs, alphavecs = interpolative_exact(rhovec, self.varphivec, inc, self.nmax)
             rvecs, phivecs, psivecs, alphavecs = exact(rhovec, self.varphivec, inc, self.nmax)
             for n in range(self.nmax+1):
                 self.test(rvecs[n],out='rvec'+str(n))
@@ -619,7 +681,7 @@ class Bam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(res.x[self.modeled_names.index(name)])
-        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype,exacttype=self.exacttype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
         
@@ -711,7 +773,7 @@ class Bam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(mean[self.modeled_names.index(name)])
-        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype,exacttype=self.exacttype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -731,7 +793,7 @@ class Bam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(sample[self.modeled_names.index(name)])
-        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype,exacttype=self.exacttype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 

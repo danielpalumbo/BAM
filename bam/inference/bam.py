@@ -3,7 +3,7 @@ import numpy as np
 import ehtim as eh
 import matplotlib.pyplot as plt
 import random
-import pickle as pkl
+import dill as pkl
 from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
@@ -187,11 +187,14 @@ class Bam:
         # self.periodic_indices = [self.modeled_names.index(i) for i in self.periodic_names]
 
         if self.mode == 'fixed':
-            print("Fixed Bam: precomputing all subimages.")
             self.imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
-            self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
-            # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
-
+            self.rhovec = D/(M*Mscale*Gpercsq*self.MUDISTS)
+            if self.calctype == 'approx' or (self.calctype =='exact' and self.exacttype =='exact') or (self.calctype == 'exact' and self.exacttype=='interp' and all([not(self.r_interp == None),not(self.tautot_interp == None),not (self.psit_interp==None)])):
+                print("Fixed Bam: precomputing all subimages.")
+                self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
+                # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
+            else:
+                print("Can't precompute subimages without interpolators!")
         self.modelim = None
         print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)
 
@@ -202,7 +205,6 @@ class Bam:
             if self.exacttype=='interp':
                 if r_interp is None:
                     print("No radius interpolator specified!")
-                elif r_
                 if tautot_interp is None:
                     print("No Mino time interpolator specified!")
                 if psit_interp is None:
@@ -216,24 +218,29 @@ class Bam:
         """
         if self.mode == 'fixed':
             fov_m = self.fov / (Gpercsq*self.M*self.Mscale / self.D)
-            rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)
+            # if fov_m/self.npix/2 < np.sqrt(27) and fov_m/2 > np.sqrt(27):
+            #     print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
+            #     rho_interp = np.hstack([np.linspace(fov_m/self.npix/2,5.1,self.npix//2), np.linspace(5.1,5.3,self.npix//2), np.linspace(5.3,fov_m/2,self.npix//2)])
+            # else:
+            rho_interp = np.linspace(fov_m/self.npix, fov_m, 3*self.npix)
   
         if self.mode == 'model':
             if isiterable(self.M) and not(isiterable(self.D)):
                 fov_m_max = self.fov / (Gpercsq*self.M[-1]*self.Mscale / self.D)
                 fov_m_min = self.fov / (Gpercsq*self.M[0]*self.Mscale / self.D)
-                if fov_m_in/self.npix/2 < np.sqrt(27) and fov_m_max/2 > np.sqrt(27):
-                    print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
-                    rho_interp = np.hstack([np.linspace(fov_m_min/self.npix/2,5.1,self.npix//2), np.linspace(5.1,5.3,self.npix//2), np.linspace(5.3,fov_m_max/2,self.npix//2)])
+                # if fov_m_in/self.npix/2 < np.sqrt(27) and fov_m_max/2 > np.sqrt(27):
+                #     print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
+                #     rho_interp = np.hstack([np.linspace(fov_m_min/self.npix/2,5.1,self.npix//2), np.linspace(5.1,5.3,self.npix//2), np.linspace(5.3,fov_m_max/2,self.npix//2)])
+                rho_interp = np.linspace(fov_m_min/self.npix/2, fov_m_max/2,3*self.npix)
             elif not(isiterable(self.M)) and not(isiterable(self.D)):
                 fov_m = self.fov / (Gpercsq*self.M*self.Mscale / self.D)
                 rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)
             else:
                 print("Guessing interpolators is not supported for this combination of unspecified mass and distance.")
                 return
-
-        r_interp, tautot_interp, psit_interp = build_all_interpolators(rho_interp)
-        self.r_inter = r_interp
+        print("Building interpolators based on rho values between " +str(rho_interp[0])+" and "+str(rho_interp[-1]))
+        r_interp, tautot_interp, psit_interp = build_all_interpolators(rho_interp, self.nmax)
+        self.r_interp = r_interp
         self.tautot_interp = tautot_interp
         self.psit_interp = psit_interp
         print("Assigned new r, tautot, and psit interpolators.")
@@ -297,13 +304,14 @@ class Bam:
 
         elif self.calctype == 'exact':
             if self.exacttype == 'interp':
-                rvecs, phivecs, psivecs, alphavecs = interpolative_exact(rhovec, self.varphivec, inc, self.nmax)
-            rvecs, phivecs, psivecs, alphavecs = exact(rhovec, self.varphivec, inc, self.nmax)
-            for n in range(self.nmax+1):
-                self.test(rvecs[n],out='rvec'+str(n))
-                self.test(phivecs[n],out='phivec'+str(n))
-                self.test(psivecs[n],out='psivec'+str(n))
-                self.test(alphavecs[n],out='alphavec'+str(n))
+                rvecs, phivecs, psivecs, alphavecs = interpolative_exact(rhovec, self.varphivec, inc, self.nmax, self.r_interp, self.tautot_interp, self.psit_interp)
+            elif self.exacttype == 'exact':
+                rvecs, phivecs, psivecs, alphavecs = exact(rhovec, self.varphivec, inc, self.nmax)
+                for n in range(self.nmax+1):
+                    self.test(rvecs[n],out='rvec'+str(n))
+                    self.test(phivecs[n],out='phivec'+str(n))
+                    self.test(psivecs[n],out='psivec'+str(n))
+                    self.test(alphavecs[n],out='alphavec'+str(n))
             # rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
             # phivecs = [getphi(self.varphivec, inc, n) for n in range(self.nmax+1)]
             # psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
@@ -808,6 +816,11 @@ class Bam:
         if self.mode == 'model':
             print("Cannot directly make images in model mode!")
             return
+        try:
+            self.ivecs
+        except:
+            self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
+                
         # imparams = self.all_params[:9] + [self.all_params[11:]]
         # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
         if n =='all':

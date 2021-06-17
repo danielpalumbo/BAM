@@ -1,6 +1,7 @@
 #computes screen varphi and impact parameter as a function of phi and rs for a schwarzschild black hole-
 #using formulas from 3dmc notes and arxiv:2010.07330, 2005.03856, 1910.12873
 
+from functools import wraps
 import numpy as np
 import scipy.optimize as op
 import mpmath as mp
@@ -228,7 +229,7 @@ def getwindangle(b, r, blphi, theta, n):
 #     # eint = interp2d(rv, tv, exact_r)
 #     return eint
 
-def build_all_interpolators(rho_interp):
+def build_all_interpolators(rho_interp, nmax=0):
     """
     Given a set of rho values, 
     buid reasonable interpolators for radius, total Mino time, and psit.
@@ -237,14 +238,19 @@ def build_all_interpolators(rho_interp):
     """
     nrho = len(rho_interp)
     r1, r3, r4 = getradroots(rho_interp)
-
+    print(nrho)
 
     psit = getpsit(rho_interp, r1, r3, r4) #note: contains imaginary components for b < sqrt(27)
     psit_interpolator = interp1d(rho_interp, np.real(psit), bounds_error=False, fill_value='extrapolate')
 
     tautot = gettautot(rho_interp, r1, r3, r4)
     max_tau = np.max(tautot)
-    tau_interp = np.linspace(0.05,max_tau,nrho) 
+    print("Interpolating over tau from 0.0001 to "+str(max_tau))
+    # tau_interp_lowend = gettau(rho_interp, 3*np.pi/2*np.ones_like(rho_interp),0, np.pi/2)
+    # tau_interp_highend = gettau(rho_interp, np.pi/2*np.ones_like(rho_interp),nmax, np.pi/2)
+    # tau_interp = np.linspace(np.min(tau_interp_lowend),np.max(tau_interp_highend),nrho)
+    # tau_interp = np.minimum(max_tau, tau_interp)
+    tau_interp = np.linspace(0.0001,max_tau,nrho) 
     tautot_interpolator = interp1d(rho_interp, tautot, bounds_error=False, fill_value='extrapolate')
 
     rr, tt = np.meshgrid(rho_interp, tau_interp)
@@ -252,10 +258,34 @@ def build_all_interpolators(rho_interp):
     r33, tt = np.meshgrid(r3, tau_interp)
     r44, tt = np.meshgrid(r4, tau_interp)
     r = r_from_rho_and_tau(rr, tt, r11, r33, r44)
+    print("Computed r values when building interpolator:")
+    print("Mean", np.mean(r))
+    print("Median",np.median(r))
+    print("Max",np.max(r))
+    print("Min",np.min(r))
+    print("Nans", np.sum(np.isnan(r)))
+    plt.imshow(rr)
+    plt.colorbar()
+    plt.show()
+    plt.imshow(tt)
+    plt.colorbar()
+    plt.show()
+    plt.imshow(r)
+    plt.colorbar()
+    plt.show()
     r[r<0] = 0
     r[r>5*rho_interp[-1]]=5*rho_interp[-1]
+    r = np.nan_to_num(r)
+    print("Computed r values when building interpolator after cleanup:")
+    print("Mean", np.mean(r))
+    print("Median",np.median(r))
+    print("Max",np.max(r))
+    print("Min",np.min(r))
+    print("Nans", np.sum(np.isnan(r)))
+    
     # r_interpolator = RectBivariateSpline(tau_interp, rho_interp, r)
-    r_int = interp2d(rho_interp, tau_interp, r, bounds_error=False, fill_value=0)
+    r_int = interp2d(rho_interp, tau_interp, r)#, bounds_error=False, fill_value=0)
+
 
     r_interpolator = lambda x, y: si.dfitpack.bispeu(r_int.tck[0], r_int.tck[1], r_int.tck[2], r_int.tck[3], r_int.tck[4], x, y)[0]
 
@@ -333,7 +363,7 @@ def interpolative_exact(rhovec, varphivec, inc, nmax, r_interpolator, tautot_int
     psivec = getpsin(inc, phivecs[0], 0)
     psivecs = [psivec + n*np.pi for n in range(nmax+1)]
     alphavecs = []
-    psit_interpolator(rhovec)
+    psit=psit_interpolator(rhovec)
     for n in range(nmax+1):
         r = rvecs[n]
         psin = psivecs[n]
@@ -345,7 +375,7 @@ def interpolative_exact(rhovec, varphivec, inc, nmax, r_interpolator, tautot_int
         out[rhovec <= np.sqrt(27)]=1
         signpr = out
 
-        arctannum = np.arctan(1 / np.sqrt(r**2/b**2/(1-2/r)-1))
+        arctannum = np.arctan(1 / np.sqrt(r**2/rhovec**2/(1-2/r)-1))
         signpsin = np.sign(psin)
         out = signpsin * arctannum#(np.pi-arctannum)
         # mask = (signpr == 1)*(0<psin)*(psin<np.pi)

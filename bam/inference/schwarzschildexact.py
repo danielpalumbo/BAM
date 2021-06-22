@@ -273,7 +273,7 @@ def build_all_interpolators(rho_interp, nmax=0):
     plt.imshow(r)
     plt.colorbar()
     plt.show()
-    r[r<0] = 0
+    r[r<0] = -r[r<0]
     r[r>5*rho_interp[-1]]=5*rho_interp[-1]
     r = np.nan_to_num(r)
     print("Computed r values when building interpolator after cleanup:")

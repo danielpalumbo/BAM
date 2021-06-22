@@ -141,7 +141,7 @@ class Bam:
         # get angles measured north of west
         PXI,PXJ = np.meshgrid(pxi,pxj)
         varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
-        varphi[varphi==0]=np.min(varphi[varphi>0])/1e2
+        varphi[varphi==0]=np.min(varphi[varphi>0])/10
         self.varphivec = varphi.flatten()
         
         #get grid of angular radii
@@ -222,16 +222,16 @@ class Bam:
             #     print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
             #     rho_interp = np.hstack([np.linspace(fov_m/self.npix/2,5.1,self.npix//2), np.linspace(5.1,5.3,self.npix//2), np.linspace(5.3,fov_m/2,self.npix//2)])
             # else:
-            rho_interp = np.linspace(fov_m/self.npix, fov_m, 3*self.npix)
+            rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)
   
         if self.mode == 'model':
             if isiterable(self.M) and not(isiterable(self.D)):
                 fov_m_max = self.fov / (Gpercsq*self.M[-1]*self.Mscale / self.D)
                 fov_m_min = self.fov / (Gpercsq*self.M[0]*self.Mscale / self.D)
-                # if fov_m_in/self.npix/2 < np.sqrt(27) and fov_m_max/2 > np.sqrt(27):
-                #     print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
-                #     rho_interp = np.hstack([np.linspace(fov_m_min/self.npix/2,5.1,self.npix//2), np.linspace(5.1,5.3,self.npix//2), np.linspace(5.3,fov_m_max/2,self.npix//2)])
-                rho_interp = np.linspace(fov_m_min/self.npix/2, fov_m_max/2,3*self.npix)
+                if fov_m_in/self.npix/2 < np.sqrt(27) and fov_m_max/2 > np.sqrt(27):
+                    print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
+                    rho_interp = np.hstack([np.linspace(fov_m_min/self.npix/2,5.1,self.npix//2)[:-1], np.linspace(5.1,5.3,self.npix//2)[:-1], np.linspace(5.3,fov_m_max/2,self.npix//2)])
+                # rho_interp = np.linspace(fov_m_min/self.npix/2, fov_m_max/2,3*self.npix)
             elif not(isiterable(self.M)) and not(isiterable(self.D)):
                 fov_m = self.fov / (Gpercsq*self.M*self.Mscale / self.D)
                 rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)

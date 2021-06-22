@@ -238,7 +238,7 @@ def build_all_interpolators(rho_interp, nmax=0):
     """
     nrho = len(rho_interp)
     r1, r3, r4 = getradroots(rho_interp)
-    print(nrho)
+    print('Number of points in rho: ',nrho)
 
     psit = getpsit(rho_interp, r1, r3, r4) #note: contains imaginary components for b < sqrt(27)
     psit_interpolator = interp1d(rho_interp, np.real(psit), bounds_error=False, fill_value='extrapolate')
@@ -264,15 +264,15 @@ def build_all_interpolators(rho_interp, nmax=0):
     print("Max",np.max(r))
     print("Min",np.min(r))
     print("Nans", np.sum(np.isnan(r)))
-    plt.imshow(rr)
-    plt.colorbar()
-    plt.show()
-    plt.imshow(tt)
-    plt.colorbar()
-    plt.show()
-    plt.imshow(r)
-    plt.colorbar()
-    plt.show()
+    # plt.imshow(rr)
+    # plt.colorbar()
+    # plt.show()
+    # plt.imshow(tt)
+    # plt.colorbar()
+    # plt.show()
+    # plt.imshow(r)
+    # plt.colorbar()
+    # plt.show()
     r[r<0] = -r[r<0]
     r[r>5*rho_interp[-1]]=5*rho_interp[-1]
     r = np.nan_to_num(r)
@@ -355,7 +355,8 @@ def interpolative_exact(rhovec, varphivec, inc, nmax, r_interpolator, tautot_int
     for n in range(nmax+1):
         tau = gettau(rhovec, varphivec, n, inc)
         tautot = tautot_interpolator(rhovec)
-        tau[tau>tautot]=np.nan
+        # tau[tau>tautot]=np.nan
+        npix = int(np.sqrt(len(tau)))
         rvecs.append(r_interpolator(rhovec, tau))
 
 
@@ -381,96 +382,12 @@ def interpolative_exact(rhovec, varphivec, inc, nmax, r_interpolator, tautot_int
         # mask = (signpr == 1)*(0<psin)*(psin<np.pi)
         # out[mask] = (signpsin*arctannum)[mask]
         alphavecs.append(out)
-    # return out
-    # alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
+
     return rvecs, phivecs, psivecs, alphavecs
 
 
 
 
-
-
-# npix = 160
-# pxi = (np.arange(npix)-0.01)/npix-0.5
-# pxj = np.arange(npix)/npix-0.5
-# # get angles measured north of west
-# PXI,PXJ = np.meshgrid(pxi,pxj)
-# varphi = np.arctan2(-PXJ,PXI)+1e-15# - np.pi/2
-# # self.varphivec = varphi.flatten()
-
-
-
-# #get grid of angular radii
-# fov = 12
-# mui = pxi*fov
-# muj = pxj*fov
-# MUI,MUJ = np.meshgrid(mui,muj)
-# rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
-
-
-# # rho_interp = np.linspace(1e-5, 10, 100)
-# # varphi = 1e-5*np.ones_like(rho_interp)
-# n = 1
-# theta = 1e-5
-
-# tau = gettau(rho, varphi, n, theta)
-# tau = np.minimum(tau,10*(n*np.pi+np.pi/2))# = 10*np.median(tau)
-# exact_r = r_from_rho_and_tau(rho, tau)
-
-# plt.imshow(tau,extent=[-fov/2,fov/2,-fov/2,fov/2])
-# plt.xlabel('alpha')
-# plt.ylabel('beta')
-# plt.title('n = '+str(n)+' Mino time')
-# plt.colorbar()
-# plt.show()
-
-# exact_r[exact_r<0]=0
-# exact_r[exact_r>10]=10
-# plt.imshow(exact_r,extent=[-fov/2,fov/2,-fov/2,fov/2])
-# plt.xlabel('alpha')
-# plt.ylabel('beta')
-# plt.title('n = '+str(n)+' radius')
-# plt.colorbar()
-# plt.show()
-
-# binmap = exact_r.copy()
-# binmap[binmap<0]=-1
-# binmap[binmap>0]=1
-# plt.imshow(binmap,extent=[-fov/2,fov/2,-fov/2,fov/2])
-# plt.xlabel('alpha')
-# plt.ylabel('beta')
-# plt.title('n = '+str(n)+' sign(radius)')
-# plt.colorbar()
-# plt.show()
-
-
-# tau_interp = np.linspace(1e-5, 10, 100)
-
-# rv, tv = np.meshgrid(rho_interp, tau_interp)
-# exact_r = r_from_rho_and_tau(rv, tv)
-
-
-# # eint = build_r_interpolator(rho_interp, tau_interp)
-
-# exact_r[exact_r<0]=0.
-# exact_r[exact_r>10*np.max(rho_interp)] = 10*np.max(rho_interp)
-# eint = RectBivariateSpline(rho_interp, tau_interp, exact_r)
-
-# eint(5, 0.314)
-
-
-# eint(np.array([5,6]),np.array([0.314, 0.414]))
-
-
-# import time
-# test_rhos = np.linspace(2,8,200**2)
-# test_taus = np.linspace(0.01, 5, 200**2)
-
-# s = time.time()
-# for i in range(10):
-#     eint(test_rhos, test_taus)
-# e = time.time()
-# print((e-s)/10)
 
 
 

@@ -1,1 +1,1 @@
-from . import model_helpers, bam, jfuncs
+from . import model_helpers, bam, jfuncs, schwarzschildexact, kerrexact

@@ -115,30 +115,10 @@ def get_radius_exact(rho, varphi, inc, a, n):
     eta = np.complex128(eta)
     up, um = get_up_um(lam, eta, a)
     r1, r2, r3, r4 = get_radroots(lam, eta, a)
-    # plt.imshow(np.real(r1).reshape((40,40)))
-    # plt.colorbar()
-    # plt.show()
-    # plt.imshow(np.real(r2).reshape((40,40)))
-    # plt.colorbar()
-    # plt.show()
-    # plt.imshow(np.imag(r3).reshape((40,40)))
-    # plt.colorbar()
-    # plt.show()
-    
     r31 = r3-r1
     r32 = r3-r2
     r42 = r4-r2
     r41 = r4-r1
-    # plt.imshow(np.angle(r31).reshape((40,40)))
-    # plt.colorbar()
-    # plt.title('phase r31')
-    # plt.show()
-    # plt.imshow((np.angle(r32)-np.angle(r31)).reshape((40,40)))
-    # plt.colorbar()
-    # plt.title('delta 321')
-    # plt.show()
-
-
     k = r32*r41 / (r31*r42)
     #build m array from beta sign and subimage index
     m = np.sign(beta)
@@ -146,23 +126,12 @@ def get_radius_exact(rho, varphi, inc, a, n):
     m += n
     fobs = np.complex128(ef(np.arcsin(np.sqrt(r31/r41)), k))
     Fobs = np.complex128(ef(np.arcsin(np.cos(inc)/np.sqrt(up)), up/um))
-    # plt.imshow(np.real(Fobs).reshape((40,40)))
-    # plt.colorbar()
-    # plt.title('Fobs')
-    # plt.show()
     Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(ef(np.pi/2, up/um)) - np.sign(beta)*Fobs))
     ffac = 1 / 2 * (r31 * r42)**(1/2)
     snnum = np.complex128(sn(ffac*Ir-fobs,k))
     snsqr = snnum**2
     rs = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
-    # plt.imshow(np.imag(fobs).reshape((40,40)))
-    # plt.colorbar()
-    # plt.title('imag(fobs)')
-    # plt.show()
-    plt.imshow(np.real(snnum).reshape((40,40)))
-    plt.colorbar()
-    plt.title('real(snnum)')
-    plt.show()
+    
     return rs
 
 def get_radius_interpolative(rho, varphi, inc, a, n, K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints):
@@ -196,53 +165,27 @@ def get_radius_interpolative(rho, varphi, inc, a, n, K_int, Fobs_int, fobs_outer
     m += n
     Fobs = np.complex128(Fobs_int(np.arcsin(np.cos(inc)/np.sqrt(up)), up/um))
     fobs = np.complex128(np.ones_like(rho))
-    # fobs[crit_mask]=-1
-    # plt.imshow(fobs.reshape((40,40)))
-    # plt.colorbar()
-    # plt.title('crit mask')
-    # plt.show()
-    print("test 1")
     fobs[~crit_mask] = np.complex128(fobs_outer_int(np.real(np.arcsin(np.sqrt(r31/r41)[~crit_mask])), np.real(k[~crit_mask])))
-    # fobs_inner_real = fobs_inner_int_real(r31_phase[crit_mask], delta321_phase[crit_mask])
-    # fobs_inner_imag = fobs_inner_int_imag(r31_phase[crit_mask], delta321_phase[crit_mask])
-    # print('fobs inner imag',np.max(fobs_inner_imag))
-
-    print("test 2")
     fobs[crit_mask] = fobs_inner_int_real(r31_phase[crit_mask], delta321_phase[crit_mask]) + 1j*fobs_inner_int_imag(r31_phase[crit_mask], delta321_phase[crit_mask])
     
-    print("test 3")
+    #everything before here is n-independent
+
     Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(K_int(up/um)) - np.sign(beta)*Fobs))
     ffac = 1 / 2 * (r31 * r42)**(1/2)
-    print(np.max((np.imag(ffac*Ir-fobs)[~crit_mask])))
-    print("test 4")
     snnum = np.complex128(np.ones_like(rho))
     snnum[~crit_mask] = np.complex128(sn_outer_int((ffac*Ir-fobs)[~crit_mask], k[~crit_mask]))
     
-    print("test 5")
     A = 1/2*np.sqrt(np.abs(r31*r42))*Ir
 
-    print("test 6")
     sn_xk = sn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*sn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])
     cndn_xk = cndn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*cndn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])    
 
     sn_yk = sn_yk_int_real(r31_phase[crit_mask],delta321_phase[crit_mask])+1j*sn_yk_int_imag(r31_phase[crit_mask],delta321_phase[crit_mask])
     cndn_yk = cndn_yk_int_real(r31_phase[crit_mask],delta321_phase[crit_mask])+1j*cndn_yk_int_imag(r31_phase[crit_mask],delta321_phase[crit_mask])
     
-
-    print("test 7")
     snnum[crit_mask] = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k[crit_mask]*(sn_xk*sn_yk)**2)
     snsqr = snnum**2
-
-    print("test 8")
     rs = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
-    # plt.imshow(np.imag(fobs).reshape((40,40)))
-    # plt.colorbar()
-    # plt.title('imag(fobs)')
-    # plt.show()
-    plt.imshow(np.real(snnum).reshape((40,40)))
-    plt.colorbar()
-    plt.title('real(snnum)')
-    plt.show()
     return rs
 
 def build_Fobs_interpolator(Fobs_angle, urat):
@@ -298,15 +241,14 @@ def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
     cn_xk = cn(xx,kk)
     dn_xk = dn(xx,kk)
     cndn_xk = cn_xk*dn_xk
-    sn_xk_int_base_real = interp2d(r31_phase, delta321_phase, np.real(sn_xk))
-    cndn_xk_int_base_real = interp2d(r31_phase, delta321_phase, np.real(cndn_xk))
-    sn_xk_int_base_imag = interp2d(r31_phase, delta321_phase, np.imag(sn_xk))
-    cndn_xk_int_base_imag = interp2d(r31_phase, delta321_phase, np.imag(cndn_xk))
+    sn_xk_int_base_real = interp2d(A, delta321_phase, np.real(sn_xk))
+    cndn_xk_int_base_real = interp2d(A, delta321_phase, np.real(cndn_xk))
+    sn_xk_int_base_imag = interp2d(A, delta321_phase, np.imag(sn_xk))
+    cndn_xk_int_base_imag = interp2d(A, delta321_phase, np.imag(cndn_xk))
     sn_xk_int_real = lambda x, y: si.dfitpack.bispeu(sn_xk_int_base_real.tck[0],sn_xk_int_base_real.tck[1],sn_xk_int_base_real.tck[2],sn_xk_int_base_real.tck[3],sn_xk_int_base_real.tck[4],x,y)[0]
     cndn_xk_int_real = lambda x, y: si.dfitpack.bispeu(cndn_xk_int_base_real.tck[0],cndn_xk_int_base_real.tck[1],cndn_xk_int_base_real.tck[2],cndn_xk_int_base_real.tck[3],cndn_xk_int_base_real.tck[4],x,y)[0]
     sn_xk_int_imag = lambda x, y: si.dfitpack.bispeu(sn_xk_int_base_imag.tck[0],sn_xk_int_base_imag.tck[1],sn_xk_int_base_imag.tck[2],sn_xk_int_base_imag.tck[3],sn_xk_int_base_imag.tck[4],x,y)[0]
     cndn_xk_int_imag = lambda x, y: si.dfitpack.bispeu(cndn_xk_int_base_imag.tck[0],cndn_xk_int_base_imag.tck[1],cndn_xk_int_base_imag.tck[2],cndn_xk_int_base_imag.tck[3],cndn_xk_int_base_imag.tck[4],x,y)[0]
-
 
     #Next, deal with functions of r31_phase and delta321_phase
     #these are (y|k) in the notes
@@ -331,30 +273,38 @@ def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
     return [sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag]
 
 
-def compare_sn(sn_inner_ints, A, r31_phase, delta321_phase):
-    sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag = sn_inner_ints
+# def compare_sn(sn_inner_ints, A, r31_phase, delta321_phase):
+#     sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag = sn_inner_ints
 
-    # x = A*np.exp(-1j*delta321_phase/2)
-    fobs_angle = np.arcsin(np.sqrt(np.exp(2j*r31_phase)))
-    k = np.exp(2j*delta321_phase)
-    fobs = ef(fobs_angle, k)
+#     x = A*np.exp(-1j*delta321_phase/2)
+#     fobs_angle = np.arcsin(np.sqrt(np.exp(2j*r31_phase)))
+#     k = np.exp(2j*delta321_phase)
+#     fobs = ef(fobs_angle, k)
+#     y = -fobs
+#     sn_xk = sn_xk_int_real(A,delta321_phase)+1j*sn_xk_int_imag(A,delta321_phase)
+#     print("Exact sn_xk", sn(x,k))
+#     print("Interped sn_xk", sn_xk)
+#     cndn_xk = cndn_xk_int_real(A,delta321_phase)+1j*cndn_xk_int_imag(A,delta321_phase)   
+#     print("Exact cndn_xk", cn(x,k)*dn(x,k)) 
+#     print("Interped cndn_xk", cndn_xk)
 
-    sn_xk = sn_xk_int_real(A,delta321_phase)+1j*sn_xk_int_imag(A,delta321_phase)
-    cndn_xk = cndn_xk_int_real(A,delta321_phase)+1j*cndn_xk_int_imag(A,delta321_phase)    
-
-    sn_yk = sn_yk_int_real(r31_phase,delta321_phase)+1j*sn_yk_int_imag(r31_phase,delta321_phase)
-    cndn_yk = cndn_yk_int_real(r31_phase,delta321_phase)+1j*cndn_yk_int_imag(r31_phase,delta321_phase)
+#     sn_yk = sn_yk_int_real(r31_phase,delta321_phase)+1j*sn_yk_int_imag(r31_phase,delta321_phase)
+#     print("Exact sn_yk", sn(y,k))
+#     print("Interped sn_yk", sn_yk)
+#     cndn_yk = cndn_yk_int_real(r31_phase,delta321_phase)+1j*cndn_yk_int_imag(r31_phase,delta321_phase)
+#     print("Exact cndn_yk", cn(y,k)*dn(y,k)) 
+#     print("Interped cndn_yk", cndn_yk)
     
-    sn_interped = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k*(sn_xk*sn_yk)**2)
-    print("Interpolated", sn_interped)
-    sn_exact = sn(A*np.exp(-1j*delta321_phase/2) - fobs, k)
-    print("Exact", sn_exact)
-    # snsqr = snnum**2
+#     sn_interped = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k*(sn_xk*sn_yk)**2)
+#     print("Interpolated", sn_interped)
+#     sn_exact = sn(x+y, k)
+#     print("Exact", sn_exact)
+#     # snsqr = snnum**2
 
 
-def test_summation(x, y, k):
-    print(sn(x+y,k))
-    print((sn(x,k)*cn(y,k)*dn(y,k) + sn(y,k)*cn(x,k)*dn(x,k))/(1-k*(sn(x,k)*sn(y,k))**2))
+# def test_summation(x, y, k):
+#     print(sn(x+y,k))
+#     print((sn(x,k)*cn(y,k)*dn(y,k) + sn(y,k)*cn(x,k)*dn(x,k))/(1-k*(sn(x,k)*sn(y,k))**2))
 
 
 k = np.linspace(-1,1)
@@ -429,7 +379,7 @@ plt.show()
 # plt.colorbar()
 # plt.show()
 
-compare_sn(sn_inner_ints, 0.4, 0.3, 0.4)
+# compare_sn(sn_inner_ints, 0.1, 0.3, 0.4)
 
 
 

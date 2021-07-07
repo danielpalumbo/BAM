@@ -71,40 +71,6 @@ def getlametatest(alpha, beta, spin, theta0, lam1=0, eta1=0, uselameta=False):
     eta0 = (beta**2 + (alpha**2 - spin**2) * (np.cos(theta0))**2)# * (not uselameta) + eta1 * uselameta
     return lam, eta0
 
-#get radial roots
-def getrootsrad(lam, eta, spin):#, spin, theta0, lam1=0, eta1=0, uselameta=False):
-    # lam = -alpha * np.sin(theta0) * (not uselameta) + lam1 * uselameta
-    # eta0 = (beta**2 + (alpha**2 - spin**2) * (np.cos(theta0))**2) * (not uselameta) + eta1 * uselameta
-    Aconst  = spin**2-eta-lam**2 + 0j
-    # print(Aconst)
-    Bconst = 2*(eta + (lam - spin)**2)
-    # print(Bconst)
-    Cconst = -spin**2 * eta
-    # print(Cconst)
-    Pconst = -1 * Aconst**2 / 12 - Cconst
-    print(Pconst)
-    Qconst = -Aconst / 3 * (Aconst**2 / 36 - Cconst) - Bconst**2 / 8
-    print(Qconst)
-    discr = -9 * Qconst + np.sqrt(12 * Pconst**3 + 81 * Qconst**2 + 0j)
-
-    #root to resolvent cubic using version of Cardano's method consistent with Mathematica (and python)
-    xi = (-2 * 3**(1/3) * Pconst + 2**(1/3) * discr**(2/3)) / (6**(2/3) * discr**(1/3)) - Aconst / 3
-
-    zconst = np.sqrt(xi / 2+0j)
-    print(zconst)
-    rootfac1 = -1 * Aconst / 2 - zconst**2 + Bconst / 4 / zconst
-    rootfac2 = -1 * Aconst / 2 - zconst**2 - Bconst / 4 / zconst
-    finalconst1 = np.sqrt(np.real(rootfac1)+(1j)*np.imag(rootfac1))
-    finalconst2 = np.sqrt(np.real(rootfac2)+(1j)*np.imag(rootfac2))
-    
-    r1 = -1 * zconst - finalconst1
-    r2 = -1 * zconst + finalconst1
-    r3 = zconst - finalconst2
-    r4 = zconst + finalconst2
-
-    return np.array([r1, r2, r3, r4])
-
-
 def kerr_exact(rho, varphi, inc, a, n):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
@@ -158,16 +124,16 @@ def kerr_interpolative(rho, varphi, inc, a, nmax, K_int, Fobs_int, fobs_outer_in
     lam = np.complex128(lam)
     eta = np.complex128(eta)
     up, um = get_up_um(lam, eta, a)
+    up[eta<0] = np.nan
     urat = np.minimum(np.real(up/um),1)
-    urat[eta<0] = 1
     r1, r2, r3, r4 = get_radroots(lam, eta, a)
 
     r31 = r3-r1
     r32 = r3-r2
     r42 = r4-r2
     r41 = r4-r1
-    r1 = np.real(r1)
-    r2 = np.real(r2)
+    # r1 = np.real(r1)
+    # r2 = np.real(r2)
     crit_mask = np.abs(np.imag(r3))>1e-14
 
     k = r32*r41 / (r31*r42)
@@ -194,7 +160,7 @@ def kerr_interpolative(rho, varphi, inc, a, nmax, K_int, Fobs_int, fobs_outer_in
     Agl = np.real(np.sqrt(r32*r42)[crit_mask])
     Bgl = np.real(np.sqrt(r31*r41)[crit_mask])
     k3 = ((Agl+Bgl)**2 - np.real(r2-r1)[crit_mask]**2)/(4*Agl*Bgl)
-    I3r_angle = np.arccos((Agl*(rp-r1[crit_mask])-Bgl*(rp-r2[crit_mask]))/(Agl*(rp-r1[crit_mask])+Bgl*(rp-r2[crit_mask])))
+    I3r_angle = np.arccos((Agl*(rp-np.real(r1)[crit_mask])-Bgl*(rp-np.real(r2)[crit_mask]))/(Agl*(rp-np.real(r1)[crit_mask])+Bgl*(rp-np.real(r2)[crit_mask])))
     I3r = fobs_outer_int(I3r_angle, k3)
     #even though we are inside the critical curve, we will use the outer fobs interpolator since the args are real
     Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*fobs_outer_int(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
@@ -238,7 +204,6 @@ def kerr_interpolative(rho, varphi, inc, a, nmax, K_int, Fobs_int, fobs_outer_in
         r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
         r[eta<0] =np.nan
         r[Ir>Ir_total] = np.nan
-        # r[r<2]=np.nan
         rs.append(r)
 
         pt = 1/r**2 * (-a*(a-lam) + (r**2+a**2) * (r**2 + a**2 -a * lam) / Delta(r,a))
@@ -334,40 +299,6 @@ def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
 
     return [sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag]
 
-
-# def compare_sn(sn_inner_ints, A, r31_phase, delta321_phase):
-#     sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag = sn_inner_ints
-
-#     x = A*np.exp(-1j*delta321_phase/2)
-#     fobs_angle = np.arcsin(np.sqrt(np.exp(2j*r31_phase)))
-#     k = np.exp(2j*delta321_phase)
-#     fobs = ef(fobs_angle, k)
-#     y = -fobs
-#     sn_xk = sn_xk_int_real(A,delta321_phase)+1j*sn_xk_int_imag(A,delta321_phase)
-#     print("Exact sn_xk", sn(x,k))
-#     print("Interped sn_xk", sn_xk)
-#     cndn_xk = cndn_xk_int_real(A,delta321_phase)+1j*cndn_xk_int_imag(A,delta321_phase)   
-#     print("Exact cndn_xk", cn(x,k)*dn(x,k)) 
-#     print("Interped cndn_xk", cndn_xk)
-
-#     sn_yk = sn_yk_int_real(r31_phase,delta321_phase)+1j*sn_yk_int_imag(r31_phase,delta321_phase)
-#     print("Exact sn_yk", sn(y,k))
-#     print("Interped sn_yk", sn_yk)
-#     cndn_yk = cndn_yk_int_real(r31_phase,delta321_phase)+1j*cndn_yk_int_imag(r31_phase,delta321_phase)
-#     print("Exact cndn_yk", cn(y,k)*dn(y,k)) 
-#     print("Interped cndn_yk", cndn_yk)
-    
-#     sn_interped = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k*(sn_xk*sn_yk)**2)
-#     print("Interpolated", sn_interped)
-#     sn_exact = sn(x+y, k)
-#     print("Exact", sn_exact)
-#     # snsqr = snnum**2
-
-
-# def test_summation(x, y, k):
-#     print(sn(x+y,k))
-#     print((sn(x,k)*cn(y,k)*dn(y,k) + sn(y,k)*cn(x,k)*dn(x,k))/(1-k*(sn(x,k)*sn(y,k))**2))
-
 # ngrid = 100
 # k = np.linspace(0,1,ngrid)
 # fobsangle = np.linspace(0, np.pi/2,ngrid)
@@ -390,12 +321,6 @@ def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
 # sn_inner_ints = build_sn_inner_interpolators(A, r31_phase, delta321_phase)
 
 
-
-# rho_interp = np.linspace(1e-3, 30,100)
-
-# out = build_all_interpolators(rho_interp)
-
-
 npix = 80
 pxi = (np.arange(npix)-0.01)/npix-0.5
 pxj = np.arange(npix)/npix-0.5
@@ -412,7 +337,7 @@ MUI,MUJ = np.meshgrid(mui,muj)
 rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
 
 
-inc = 1e-5/180*np.pi
+inc = 80/180*np.pi
 a = 0.5
 nmax = 2
 rhovec = rho.flatten()
@@ -423,7 +348,7 @@ rs_interped = kerr_interpolative(rhovec, varphivec, inc, a, nmax, K_int, Fobs_in
 # r1 = rs_interped[1]
 # r1[r1>50]=50
 # r1[r1<0]=0
-plt.imshow(rs_interped[2].reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
+plt.imshow(rs_interped[0].reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
 plt.colorbar()
 plt.show()
 

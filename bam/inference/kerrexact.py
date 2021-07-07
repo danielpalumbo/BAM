@@ -155,10 +155,10 @@ def get_radius_exact(rho, varphi, inc, a, n):
     snnum = np.complex128(sn(ffac*Ir-fobs,k))
     snsqr = snnum**2
     rs = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
-    plt.imshow(np.imag(fobs).reshape((40,40)))
-    plt.colorbar()
-    plt.title('imag(fobs)')
-    plt.show()
+    # plt.imshow(np.imag(fobs).reshape((40,40)))
+    # plt.colorbar()
+    # plt.title('imag(fobs)')
+    # plt.show()
     plt.imshow(np.real(snnum).reshape((40,40)))
     plt.colorbar()
     plt.title('real(snnum)')
@@ -235,10 +235,10 @@ def get_radius_interpolative(rho, varphi, inc, a, n, K_int, Fobs_int, fobs_outer
 
     print("test 8")
     rs = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
-    plt.imshow(np.imag(fobs).reshape((40,40)))
-    plt.colorbar()
-    plt.title('imag(fobs)')
-    plt.show()
+    # plt.imshow(np.imag(fobs).reshape((40,40)))
+    # plt.colorbar()
+    # plt.title('imag(fobs)')
+    # plt.show()
     plt.imshow(np.real(snnum).reshape((40,40)))
     plt.colorbar()
     plt.title('real(snnum)')
@@ -354,7 +354,7 @@ def compare_sn(sn_inner_ints, A, r31_phase, delta321_phase):
 
 def test_summation(x, y, k):
     print(sn(x+y,k))
-    print((sn(x,k)*cn(y,k)*dn(y,k) + sn(y,k)*cn(x,k)*dn(x,k))/(1-(k*sn(x,k)*sn(y,k))**2))
+    print((sn(x,k)*cn(y,k)*dn(y,k) + sn(y,k)*cn(x,k)*dn(x,k))/(1-k*(sn(x,k)*sn(y,k))**2))
 
 
 k = np.linspace(-1,1)

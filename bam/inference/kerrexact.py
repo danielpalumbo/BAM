@@ -13,13 +13,13 @@ import scipy.interpolate as si
 jacobi_ellip = np.frompyfunc(mp.ellipfun, 3, 1)
 ef_base = np.frompyfunc(mp.ellipf, 2, 1)
 def ef(u, k):
-    return np.complex128(ef_base(u, k**2))
+    return np.complex128(ef_base(u, k))
 def sn(u, k):
-    return np.complex128(jacobi_ellip('sn',u,k**2))
+    return np.complex128(jacobi_ellip('sn',u,k))
 def cn(u, k):
-    return np.complex128(jacobi_ellip('cn',u,k**2))
+    return np.complex128(jacobi_ellip('cn',u,k))
 def dn(u, k):
-    return np.complex128(jacobi_ellip('dn',u,k**2))
+    return np.complex128(jacobi_ellip('dn',u,k))
 
 
 #given rho, varphi, n, inc, spin, get lambda and eta
@@ -230,7 +230,7 @@ def get_radius_interpolative(rho, varphi, inc, a, n, K_int, Fobs_int, fobs_outer
     
 
     print("test 7")
-    snnum[crit_mask] = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-(k[crit_mask]*sn_xk*sn_yk)**2)
+    snnum[crit_mask] = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k[crit_mask]*(sn_xk*sn_yk)**2)
     snsqr = snnum**2
 
     print("test 8")
@@ -266,7 +266,7 @@ def build_fobs_outer_interpolator(fobs_angle, k):
 def build_fobs_inner_interpolators(r31_phase, delta321_phase):
     rr, dd = np.meshgrid(r31_phase, delta321_phase)
     ff = np.arcsin(np.sqrt(np.exp(2j*rr)))
-    kk = np.exp(1j*dd)
+    kk = np.exp(2j*dd)
     fobs = ef(ff,kk)
     fobs_real = np.real(fobs)
     fobs_imag = np.imag(fobs)
@@ -293,7 +293,7 @@ def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
     #these are (x|k)
     AA, dd = np.meshgrid(A, delta321_phase)
     xx = AA * np.exp(-1j*dd / 2)
-    kk = np.exp(1j*dd)
+    kk = np.exp(2j*dd)
     sn_xk = sn(xx,kk)
     cn_xk = cn(xx,kk)
     dn_xk = dn(xx,kk)
@@ -312,7 +312,7 @@ def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
     #these are (y|k) in the notes
     rr, dd = np.meshgrid(r31_phase, delta321_phase)
     ff = np.arcsin(np.sqrt(np.exp(2j*rr)))
-    kk = np.exp(1j*dd)
+    kk = np.exp(2j*dd)
     fobs = ef(ff,kk)
     yy = -fobs
     sn_yk = sn(yy, kk)
@@ -336,7 +336,7 @@ def compare_sn(sn_inner_ints, A, r31_phase, delta321_phase):
 
     # x = A*np.exp(-1j*delta321_phase/2)
     fobs_angle = np.arcsin(np.sqrt(np.exp(2j*r31_phase)))
-    k = np.exp(1j*delta321_phase)
+    k = np.exp(2j*delta321_phase)
     fobs = ef(fobs_angle, k)
 
     sn_xk = sn_xk_int_real(A,delta321_phase)+1j*sn_xk_int_imag(A,delta321_phase)
@@ -345,7 +345,7 @@ def compare_sn(sn_inner_ints, A, r31_phase, delta321_phase):
     sn_yk = sn_yk_int_real(r31_phase,delta321_phase)+1j*sn_yk_int_imag(r31_phase,delta321_phase)
     cndn_yk = cndn_yk_int_real(r31_phase,delta321_phase)+1j*cndn_yk_int_imag(r31_phase,delta321_phase)
     
-    sn_interped = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-(k*sn_xk*sn_yk)**2)
+    sn_interped = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k*(sn_xk*sn_yk)**2)
     print("Interpolated", sn_interped)
     sn_exact = sn(A*np.exp(-1j*delta321_phase/2) - fobs, k)
     print("Exact", sn_exact)
@@ -366,7 +366,7 @@ delta321_phase = np.linspace(-np.pi,np.pi)
 fobs_inner_ints = build_fobs_inner_interpolators(r31_phase, delta321_phase)
 
 
-urat = np.linspace(-10,10,100)
+urat = np.linspace(-10,10)
 Fobsangle = np.linspace(0, np.pi/2)
 Fobs_int = build_Fobs_interpolator(Fobsangle, urat)
 
@@ -384,44 +384,44 @@ sn_inner_ints = build_sn_inner_interpolators(A, r31_phase, delta321_phase)
 # out = build_all_interpolators(rho_interp)
 
 
-# npix = 40
-# pxi = (np.arange(npix)-0.01)/npix-0.5
-# pxj = np.arange(npix)/npix-0.5
-# # get angles measured north of west
-# PXI,PXJ = np.meshgrid(pxi,pxj)
-# varphi = np.arctan2(-PXJ,PXI)+1e-15# - np.pi/2
-# # self.varphivec = varphi.flatten()
+npix = 40
+pxi = (np.arange(npix)-0.01)/npix-0.5
+pxj = np.arange(npix)/npix-0.5
+# get angles measured north of west
+PXI,PXJ = np.meshgrid(pxi,pxj)
+varphi = np.arctan2(-PXJ,PXI)+1e-15# - np.pi/2
+# self.varphivec = varphi.flatten()
 
-# #get grid of angular radii
-# fov = 16
-# mui = pxi*fov
-# muj = pxj*fov
-# MUI,MUJ = np.meshgrid(mui,muj)
-# rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
+#get grid of angular radii
+fov = 16
+mui = pxi*fov
+muj = pxj*fov
+MUI,MUJ = np.meshgrid(mui,muj)
+rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
 
 
+inc = 17/180*np.pi
+a = 0.5
+n = 0
+rhovec = rho.flatten()
+varphivec = varphi.flatten()
+r_interped = get_radius_interpolative(rhovec, varphivec, inc, a, n, K_int, Fobs_int,fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints)
+# r[r<0] = 0
+plt.imshow(r_interped.reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
+plt.colorbar()
+plt.show()
+
+
+# a = 0.99
 # inc = 17/180*np.pi
-# a = 0.5
 # n = 0
-# rhovec = rho.flatten()
-# varphivec = varphi.flatten()
-# r_interped = get_radius_interpolative(rhovec, varphivec, inc, a, n, K_int, Fobs_int,fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints)
-# # r[r<0] = 0
-# plt.imshow(r_interped.reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
-# plt.colorbar()
-# plt.show()
-
-
-# # a = 0.99
-# # inc = 17/180*np.pi
-# # n = 0
-# r = get_radius_exact(rhovec, varphivec, inc, a, n)
-# # r[r<0]=0
-# # r[r>2*np.max(rhovec)] = 0#2*np.max(rhovec)
-# r[r==np.max(r)] = 0
-# plt.imshow(r.reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
-# plt.colorbar()
-# plt.show()
+r = get_radius_exact(rhovec, varphivec, inc, a, n)
+# r[r<0]=0
+# r[r>2*np.max(rhovec)] = 0#2*np.max(rhovec)
+r[r==np.max(r)] = 0
+plt.imshow(r.reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
+plt.colorbar()
+plt.show()
 
 
 

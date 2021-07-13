@@ -233,7 +233,7 @@ class KerrBam:
             rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, interp=False)
             
         for n in range(self.nmax+1):
-            profile = self.jfunc(rvecs[n], jargs) * redshifts**(3+self.spec)
+            profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+self.spec)
             ivecs[n]*=profile
             qvecs[n]*=profile
             uvecs[n]*=profile

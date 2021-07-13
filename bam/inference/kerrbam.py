@@ -10,64 +10,13 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
-from bam.inference.schwarzschildexact import getphi, rinvert, getalphan, getpsin, exact, interpolative_exact, build_all_interpolators
+from kerrexact import kerr_exact, kerr_interpolative, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
-# theano.config.exception_verbosity='high'
-# theano.config.compute_test_value = 'ignore'
-
 
 
 def get_uniform_transform(lower, upper):
     return lambda x: (upper-lower)*x + lower
-
-def beloborodov_r(psi, b):
-    psi = np.complex128(psi)
-    b = np.complex128(b)
-    return np.sqrt(((1-np.cos(psi))**2)/((1+np.cos(psi))**2) + b**2 / np.sin(psi)**2)-(1-np.cos(psi))/(1+np.cos(psi))
-
-def getrt(rho):
-    rho = np.complex128(rho)
-    det = (-9*rho**2 + np.sqrt(3)*np.sqrt(27*rho**4 - rho**6))**(1/3)
-    rt = rho**2 / (3**(1/3)*det) + det / 3**(2/3)
-    return rt
-
-def getpsit(rt):
-    # rt = np.complex128(rt)
-    return np.arccos(-2 / (rt-2))
-
-def piecewise_better(rho, varphi, inc, nmax):
-    phivec = arctan2(sin(varphi), cos(varphi)*cos(inc))
-    psivec = getpsin(inc, phivec, 0)
-    psivecs = [psivec]+[psivec+n*np.pi for n in range(1, nmax+1)]
-
-    sinprod = sin(inc)*sin(phivec)
-    numerator = 1.+rho**2 - (-3.+rho**2.)*sinprod+3.*sinprod**2. + sinprod**3. 
-    denomenator = (-1.+sinprod)**2 * (1+sinprod)
-    sqq = sqrt(numerator/denomenator)
-    rvec = (1.-sqq + sinprod*(1.+sqq))/(sinprod-1.)
-
-    rt = getrt(rho)
-    psit = getpsit(rt)
-    nosubim_mask = 2*psit < psivec+np.pi
-
-    rvecs = [rvec]+[beloborodov_r(psit - np.sqrt((psit-psivecs[n])**2), rho).real for n in range(1, nmax+1)]
-    for vec in rvecs[1:]:
-        vec[nosubim_mask] = np.nan
-
-    phivecs = [phivec]+[phivec+n*np.pi for n in range(1,nmax+1)]
-
-    # cosalphavec = 1. - (1. - cos(psivecs[0])) * (1. - 2./rvecs[0])
-    # alphavecs = [np.arccos(cosalphavec)]+[np.arcsin(np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
-    
-    cosalphavecs = [1. - (1. - cos(psivecs[i])) * (1. - 2./rvecs[i]) for i in range(nmax+1)]
-    alphavecs = [np.arccos(cosalphavec) for cosalphavec in cosalphavecs]#+[np.arcsin(np.sqrt(1-2/rvecs[n])*np.sqrt(27)/rvecs[n]) for n in range(1, nmax+1)]
-    
-
-    for i in range(1,len(alphavecs)):
-        alphavecs[i] = np.sign(alphavecs[i])*(np.pi-np.abs(alphavecs[i]))
-
-    return rvecs, phivecs, psivecs, alphavecs
 
 def cphase_uvpairs(cphase_data):
     cphaseu1 = cphase_data['u1']
@@ -103,16 +52,18 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., calctype='approx',approxtype='better', exacttype='interp',r_interp=None,tautot_interp=None,psit_interp=None, Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., exacttype='interp', K_int = None, Fobs_int = None, fobs_outer_int = None, fobs_inner_ints = None, sn_outer_int = None, sn_inner_ints = None, Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
         self.periodic=periodic
         self.dynamic=False
         self.source = source
         self.polflux = polflux
-        self.approxtype = approxtype
         self.exacttype = exacttype
-        self.r_interp = r_interp
-        self.tautot_interp = tautot_interp
-        self.psit_interp = psit_interp
+        self.K_int = K_int
+        self.Fobs_int = Fobs_int
+        self.fobs_outer_int = fobs_outer_int
+        self.fobs_inner_ints = fobs_inner_ints
+        self.sn_outer_int = sn_outer_int
+        self.sn_inner_ints = sn_inner_ints
         self.fov = fov
         self.npix = npix
         self.recent_sampler = None
@@ -123,17 +74,17 @@ class KerrBam:
         self.jargs = jargs
         self.M = M
         self.D = D
+        self.a = a
         self.inc = inc
         self.PA = PA
         self.beta = beta
-        self.chi=chi
-        self.thetabz=thetabz
-        self.spec=spec
+        self.chi = chi
+        self.thetabz = thetabz
+        self.spec = spec
         self.f = f
         self.e = e
         self.nmax = nmax
         self.zbl = zbl
-        self.calctype = calctype
         self.rho_c = np.sqrt(27)
         self.Mscale = Mscale
         pxi = (np.arange(npix)-0.01)/npix-0.5
@@ -155,15 +106,16 @@ class KerrBam:
         self.imxvec = -self.MUDISTS*np.cos(self.varphivec)
        
         self.imyvec = self.MUDISTS*np.sin(self.varphivec)
-        if any([isiterable(i) for i in [M, D, inc, zbl, PA, f, beta, chi, thetabz, e, spec]+jargs]):
+        if any([isiterable(i) for i in [M, D, a, inc, zbl, PA, f, beta, chi, thetabz, e, spec]+jargs]):
             mode = 'model'
         else:
             mode = 'fixed' 
         self.mode = mode
 
-
-        self.all_params = [M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e]+jargs
-        self.all_names = ['M','D','inc','zbl','PA','beta','chi','thetabz','spec','f','e']+jarg_names
+        self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
+        self.all_interp_names = ['K','Fobs','fobs_outer','fobs_inner','sn_outer','sn_inner']
+        self.all_params = [M, D, a, inc, zbl, PA, beta, chi, thetabz, spec, f, e]+jargs
+        self.all_names = ['M','D','a', 'inc','zbl','PA','beta','chi','thetabz','spec','f','e']+jarg_names
         self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
         self.modeled_names = [self.all_names[i] for i in self.modeled_indices]
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
@@ -187,28 +139,21 @@ class KerrBam:
         # self.periodic_indices = [self.modeled_names.index(i) for i in self.periodic_names]
 
         if self.mode == 'fixed':
-            self.imparams = [self.M, self.D, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
+            self.imparams = [self.M, self.D, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
             self.rhovec = D/(M*Mscale*Gpercsq*self.MUDISTS)
-            if self.calctype == 'approx' or (self.calctype =='exact' and self.exacttype =='exact') or (self.calctype == 'exact' and self.exacttype=='interp' and all([not(self.r_interp == None),not(self.tautot_interp == None),not (self.psit_interp==None)])):
+            if self.exacttype=='interp' and all([not(self.r_interp == None),not(self.tautot_interp == None),not (self.psit_interp==None)]):
                 print("Fixed Bam: precomputing all subimages.")
                 self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
                 # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
             else:
                 print("Can't precompute subimages without interpolators!")
         self.modelim = None
+        if self.exacttype=='interp':
+            for i in range(len(all_interp_names)):
+                if self.all_interps[i] is None:
+                    print(all_interp_names[i]+' does not have a specified interpolator!')
+            
         print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)
-
-        if self.calctype == 'approx':  
-            print("Using approxtype", approxtype)
-        elif self.calctype == 'exact':
-            print("Using exacttype", exacttype)
-            if self.exacttype=='interp':
-                if r_interp is None:
-                    print("No radius interpolator specified!")
-                if tautot_interp is None:
-                    print("No Mino time interpolator specified!")
-                if psit_interp is None:
-                    print ("No turning point psi interpolator specified!")
 
     def guess_new_interpolators(self):
         """
@@ -216,50 +161,41 @@ class KerrBam:
         specify a reasonable range of rho values and compute
         new interpolators.
         """
-        if self.mode == 'fixed':
-            fov_m = self.fov / (Gpercsq*self.M*self.Mscale / self.D)
-            # if fov_m/self.npix/2 < np.sqrt(27) and fov_m/2 > np.sqrt(27):
-            #     print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
-            #     rho_interp = np.hstack([np.linspace(fov_m/self.npix/2,5.1,self.npix//2), np.linspace(5.1,5.3,self.npix//2), np.linspace(5.3,fov_m/2,self.npix//2)])
-            # else:
-            rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)
-  
-        if self.mode == 'model':
-            if isiterable(self.M) and not(isiterable(self.D)):
-                fov_m_max = self.fov / (Gpercsq*self.M[-1]*self.Mscale / self.D)
-                fov_m_min = self.fov / (Gpercsq*self.M[0]*self.Mscale / self.D)
-                if fov_m_in/self.npix/2 < np.sqrt(27) and fov_m_max/2 > np.sqrt(27):
-                    print("Evaluable rho straddles the photon ring; using a fine mesh over the critical curve.")
-                    rho_interp = np.hstack([np.linspace(fov_m_min/self.npix/2,5.1,self.npix//2)[:-1], np.linspace(5.1,5.3,self.npix//2)[:-1], np.linspace(5.3,fov_m_max/2,self.npix//2)])
-                # rho_interp = np.linspace(fov_m_min/self.npix/2, fov_m_max/2,3*self.npix)
-            elif not(isiterable(self.M)) and not(isiterable(self.D)):
-                fov_m = self.fov / (Gpercsq*self.M*self.Mscale / self.D)
-                rho_interp = np.linspace(fov_m/self.npix, fov_m, self.npix)
-            else:
-                print("Guessing interpolators is not supported for this combination of unspecified mass and distance.")
-                return
-        print("Building interpolators based on rho values between " +str(rho_interp[0])+" and "+str(rho_interp[-1]))
-        r_interp, tautot_interp, psit_interp = build_all_interpolators(rho_interp, self.nmax)
-        self.r_interp = r_interp
-        self.tautot_interp = tautot_interp
-        self.psit_interp = psit_interp
-        print("Assigned new r, tautot, and psit interpolators.")
+        print("Building all new interpolators from reasonable numbers (PLACEHOLDER FUNCTIONALITY)")
+        K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints = build_all_interpolators()
+        self.K_int = K_int
+        self.Fobs_int = Fobs_int
+        self.fobs_outer_int = fobs_outer_int
+        self.fobs_inner_ints = fobs_inner_ints
+        self.sn_outer_int = sn_outer_int
+        self.sn_inner_ints = sn_inner_ints
+        print("FInished building all interpolators.")
                             
     def save_interpolators(self, outname=''):
-        with open(outname+'r_interpolator.pkl','wb') as myfile:
-            pkl.dump(self.r_interp, myfile)
-        with open(outname+'tautot_interpolator.pkl','wb') as myfile:
-            pkl.dump(self.tautot_interp, myfile)
-        with open(outname+'psit_interpolator.pkl','wb') as myfile:
-            pkl.dump(self.psit_interp, myfile)
+        for i in range(len(all_interp_names)):
+            with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
+                pkl.dump(self.all_interps[i], myfile)
+            # if type(self.all_interps[i]) is list:
+            #     for j in range(len(self.all_interps[i])):
+            #         with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','wb') as myfile:
+            #             pkl.dump(self.all_interps[i][j], myfile)
+            # else:
+            #     with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
+            #         pkl.dump(self.all_interps[i], myfile)
 
-    def load_interpolators(self, r_interp_fname, tautot_interp_fname, psit_interp_fname):
-        with open(r_interp_fname,'rb') as myfile:
-            self.r_interp = pkl.load(myfile)
-        with open(tautot_interp_fname,'rb') as myfile:
-            self.tautot_interp = pkl.load(myfile)
-        with open(psit_interp_fname,'rb') as myfile:
-            self.psit_interp = pkl.load(myfile)
+    def load_interpolators(self, outname=''):
+        for i in range(len(all_interp_names)):
+            with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','rb') as myfile:
+                self.all_interps[i] = pkl.load(myfile)
+            # if 'inner' in all_interp_names[i]:
+            #     self.all_interps[i] = []
+            #     if 'fobs' in all_interp_names[i]:
+            #         for j in range(2):
+            #             with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','rb') as myfile:
+            #                 self.all_interps[i].append(pkl.load(myfile))
+            # else:
+            #     with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
+            #         pkl.dump(self.all_interps[i], myfile)
 
     def test(self, i, out):
         plt.close('all')
@@ -276,7 +212,7 @@ class KerrBam:
         Given a list of values of modeled parameters in imparams,
         compute the resulting qvec, uvec, ivec, rotimxvec, and rotimyvec.
         """
-        M, D, inc, zbl, PA, beta, chi, thetabz, spec, jargs = imparams
+        M, D, a, inc, zbl, PA, beta, chi, thetabz, spec, jargs = imparams
 
         # self.M = M
         #this is the end of the problem setup;
@@ -291,248 +227,17 @@ class KerrBam:
         #convert mudists to gravitational units
         rhovec = D / (M*self.Mscale*Gpercsq) * self.MUDISTS
         
-
-        if self.calctype == 'approx':
-
-            if self.approxtype == 'better':
-                rvecs, phivecs, psivecs, alphavecs = piecewise_better(rhovec, self.varphivec, inc, self.nmax)
-            elif self.approxtype == 'belo':
-                print("No! Use better!")
-                return
-                # rvecs, phivecs, psivecs, alphavecs = beloborodov(rhovec, self.varphivec, inc, self.nmax)
-            # rvec, phivec = emission_coordinates(self.rhovec, self.varphivec)
-
-        elif self.calctype == 'exact':
-            if self.exacttype == 'interp':
-                rvecs, phivecs, psivecs, alphavecs = interpolative_exact(rhovec, self.varphivec, inc, self.nmax, self.r_interp, self.tautot_interp, self.psit_interp)
-            elif self.exacttype == 'exact':
-                rvecs, phivecs, psivecs, alphavecs = exact(rhovec, self.varphivec, inc, self.nmax)
-                for n in range(self.nmax+1):
-                    self.test(rvecs[n],out='rvec'+str(n))
-                    self.test(phivecs[n],out='phivec'+str(n))
-                    self.test(psivecs[n],out='psivec'+str(n))
-                    self.test(alphavecs[n],out='alphavec'+str(n))
-            # rvecs = [np.maximum(rinvert(rhovec,self.varphivec, n, inc),2.+1.e-5) for n in range(self.nmax+1)]
-            # phivecs = [getphi(self.varphivec, inc, n) for n in range(self.nmax+1)]
-            # psivecs = [getpsin(inc, phivecs[n], n) for n in range(self.nmax+1)]
-            # alphavecs = [getalphan(rhovec, rvecs[n], inc, psivecs[n]) for n in range(self.nmax+1)]
-            # cosalphas = [np.cos(alpha) for alpha in alphas]
-        # if len(rvecs)>1:
-        #     self.test(rvecs[1])
-        #     self.test(phivecs[1])
-        #     self.test(alphavecs[0])
-        #     self.test(alphavecs[1])
-            # self.test(self.jfunc(rvecs[1], phivecs[1],jargs))
-
-        eta = chi+np.pi
-        beq = sin(thetabz)
-        bz = cos(thetabz)
-        br = beq*cos(eta)
-        bphi = beq*sin(eta)
-        coschi = cos(chi)
-        sinchi = sin(chi)
-        betax = beta*coschi
-        betay = beta*sinchi
-        bx = br
-        by = bphi
-        bmag = sqrt(bx**2 + by**2 + bz**2)
-        sintheta = sin(inc)
-        # print(inc)
-        # print(sintheta)
-        costheta = cos(inc)    
-        #now do the rotation
-        #note that this is essentially an inverse mapping, saying where
-        #previously unrotated points can be found on the new image, after rotation
-        #hence, the minus sign
-        # rotimxvec = cos(-PA)*self.imxvec - sin(-PA)*self.imyvec
-        # rotimyvec = sin(-PA)*self.imxvec + cos(-PA)*self.imyvec
-        # self.test(rotimxvec)
-        ivecs = []
-        qvecs = []
-        uvecs = []        
-
+        if self.exacttype == 'interp':
+            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, interp=True, [self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints])
+        elif self.exacttype == 'exact':
+            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, interp=False)
+            
         for n in range(self.nmax+1):
-            rvec = np.maximum(rvecs[n],2.0001)
-            # rvec = rvecs[n]
-            phivec = phivecs[n]
-            # print(phivec)
-            psivec = psivecs[n]
-            # print(psivec)
-            alphavec = alphavecs[n]
-            # print(alphavec)
-            cospsi = np.cos(psivec)
-            sinpsi = np.sin(psivec)
-            cosalpha = np.cos(alphavec)
-            sinalpha = np.sin(alphavec)
+            profile = self.jfunc(rvecs[n], jargs) * redshifts**(3+self.spec)
+            ivecs[n]*=profile
+            qvecs[n]*=profile
+            uvecs[n]*=profile
 
-            # self.test(rvec,out='rvec'+str(n))
-            # if n == 1:
-            #     plt.imshow(rvec.reshape((self.npix, self.npix)))
-            #     plt.show()
-            # cosalpha = cosalphas[n]
-            # psi = psis[n]
-            # self.test(alphavec, out='alphavec'+str(n))
-            gfac = sqrt(1. - 2./rvec)
-            gfacinv = 1. / gfac
-            gamma = 1. / sqrt(1. - beta**2)
-
-            sinphi = sin(phivec)
-            cosphi = cos(phivec)
-
-            # self.test(sinpsi)
-
-
-            # # cosalpha = np.cos(alpha)
-            # if self.calctype == 'exact':
-            #     psivec = psivecs[n]
-            #     cospsi = np.cos(psivec)
-            #     sinpsi = np.sin(psivec)
-            #     alpha = alphas[n]
-            #     cosalpha = np.cos(alpha)
-            #     sinalpha = np.sin(alpha)
-            # else:                    
-            #     psivec = psivecs[n]
-            #     cospsi = np.cos(psivec)
-            #     sinpsi = np.sin(psivec)
-            #     # cospsi = -sintheta * sinphi
-            #     # sinpsi = sqrt(1. - cospsi**2)
-            #     cosalpha = 1. - (1. - cospsi) * (1. - 2./rvec)
-            #     sinalpha =sqrt(1. - cosalpha**2)
-                
-            sinxi = sintheta * cosphi / sinpsi
-            cosxi = costheta / sinpsi
-            # if n%2 == 1:
-            #     sinxi = np.sin(np.pi-np.arcsin(sinxi))
-            #     cosxi = np.cos(np.pi-np.arccos(cosxi))
-
-            
-            kPthat = gfacinv
-            kPxhat = cosalpha * gfacinv
-            kPyhat = -sinxi * sinalpha * gfacinv
-            kPzhat = cosxi * sinalpha * gfacinv
-
-            # self.test(alphavec,'alpha'+str(n))
-            # self.test(psivec,'psi'+str(n))
-            # self.test(sinxi, 'sinxi'+str(n))
-            # self.test(cosxi, 'cosxi'+str(n))
-            # self.test(kPthat, 'kPthat'+str(n))
-            # self.test(kPxhat, 'kPxhat'+str(n))
-            # self.test(kPyhat, 'kPyhat'+str(n))
-            # self.test(kPzhat, 'kPzhat'+str(n))
-            kFthat = gamma * (kPthat - betax * kPxhat - betay * kPyhat)
-            kFxhat = -gamma * betax * kPthat + (1. + (gamma-1.) * coschi**2) * kPxhat + (gamma-1.) * coschi * sinchi * kPyhat
-            kFyhat = -gamma * betay * kPthat + (gamma-1.) * sinchi * coschi * kPxhat + (1. + (gamma-1.) * sinchi**2) * kPyhat
-            kFzhat = kPzhat
-
-
-            # kFzhat *= (-1)**n
-
-
-            delta = 1. / kFthat
-            
-            # self.test(delta)
-
-            kcrossbx = kFyhat * bz - kFzhat * by
-            kcrossby = kFzhat * bx - kFxhat * bz
-            kcrossbz = kFxhat * by - kFyhat * bx
-
-            # self.test(kcrossbx,out='kcrossbx'+str(n))
-            # self.test(kcrossby,out='kcrossby'+str(n))
-            # self.test(kcrossbz,out='kcrossbz'+str(n))
-
-            # kcrossbx *= (-1)**n
-            # kcrossby *= (-1)**n
-            # kcrossbz *= (-1)**n
-
-            # polfac = np.sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
-            sinzeta = sqrt(kcrossbx**2 + kcrossby**2 + kcrossbz**2) / (kFthat * bmag)
-            # self.test(sinzeta)
-            profile = self.jfunc(rvec, phivec, jargs)
-            # profile=1.
-            # 
-            # print(self.profile)
-            if self.polflux:
-                polarizedintensity = sinzeta**(1.+spec) * delta**(3. + spec) * profile
-            else:
-                polarizedintensity = delta**(3+spec)*profile        
-            # if INTENSITYISOTROPIC:
-            #     intensity = delta**(3. + SPECTRALINDEX)
-            # else:
-            #     intensity = polarizedintensity
-            
-                
-            pathlength = np.abs(kFthat/kFzhat)
-            mag = polarizedintensity*pathlength
-            # self.test(pathlength, out='pathlength'+str(n))
-            # self.test(mag, out='mag'+str(n))
-            # self.test(bmag)
-            # self.test(kFthat)
-
-            fFthat = 0.
-            fFxhat = kcrossbx / (kFthat * bmag)
-            fFyhat = kcrossby / (kFthat * bmag)
-            fFzhat = kcrossbz / (kFthat * bmag)# * (-1)**n
-            
-            # fPthat = gamma * (fFthat + beta * fFyhat)
-            # fPxhat = fFxhat
-            # fPyhat = gamma * (beta *fFthat + fFyhat)
-            # fPzhat = fFzhat
-            
-            fPthat = gamma * (fFthat + betax * fFxhat + betay * fFyhat)
-            fPxhat = gamma * betax * fFthat + (1. + (gamma-1.) * coschi**2) * fFxhat + (gamma-1.) * coschi * sinchi * fFyhat
-            fPyhat = gamma * betay * fFthat + (gamma-1.) * sinchi * coschi * fFxhat + (1. + (gamma-1.) * sinchi**2) * fFyhat
-            fPzhat = fFzhat
-
-            kPrhat = kPxhat
-            kPthhat = -kPzhat
-            kPphat = kPyhat
-            fPrhat = fPxhat
-            fPthhat = -fPzhat
-            fPphat = fPyhat
-               
-            k1 = rvec * (kPthat * fPrhat - kPrhat * fPthat)
-            k2 = -rvec * (kPphat * fPthhat - kPthhat * fPphat)
-                
-            kOlp = rvec * kPphat
-
-
-            radicand = kPthhat**2 - kPphat**2 * costheta**2 / sintheta**2
-            radicand = np.maximum(radicand,0.)
-            # due to machine precision, some small negative values are present. We clip these here.
-            # radicand[radicand<0] = 0
-            radical = sqrt(radicand)
-            # plt.imshow(radicand)
-            # plt.show()
-            kOlth = rvec * radical * np.sign(sinphi) * (-1)**n
-            #sinphi / (sqrt(sinphi**2)+1.e-10)
-
-            xalpha = -kOlp / sintheta
-            ybeta = kOlth
-            nu = -xalpha
-            den = sqrt((k1**2 + k2**2) * (ybeta**2 + nu**2))
-
-            ealpha = (ybeta * k2 - nu * k1) / den
-            ebeta = (ybeta * k1 + nu * k2) / den
-            if self.polflux:
-                qvec = -mag*(ealpha**2 - ebeta**2)# * (-1)**n
-                uvec = -mag*(2*ealpha*ebeta)
-                qvec[np.isnan(qvec)]=0
-                uvec[np.isnan(uvec)]=0
-                ivec = sqrt(qvec**2 + uvec**2)
-            else:
-                ivec = mag
-                ivec[np.isnan(ivec)] = 0
-                qvec = 0*ivec
-                uvec = 0*ivec
-            # self.test(ivec, 'ivec'+str(n))
-
-            qvecs.append(qvec)
-            uvecs.append(uvec)
-            ivecs.append(ivec)
-            # tf = np.sum(ivec)
-            # qvec = qvec * zbl/tf
-            # uvec = uvec * zbl/tf
-            # ivec = ivec * zbl/tf
         tf = np.sum(ivecs)
         ivecs = [ivec*zbl/tf for ivec in ivecs]
         qvecs = [qvec*zbl/tf for qvec in qvecs]
@@ -625,7 +330,7 @@ class KerrBam:
             #so it should have 11+N parameters where N is the number of jargs
             #M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e + jargs
             #f and e are not used in image computation, so slice around them for now
-            imparams = to_eval[:9] + [to_eval[11:]]
+            imparams = to_eval[:10] + [to_eval[12:]]
             ivecs, qvecs, uvecs = self.compute_image(imparams)#, rotimxvec, rotimyvec 
             out = 0.
             ivec = np.sum(ivecs,axis=0)
@@ -638,7 +343,7 @@ class KerrBam:
             self.modelim.pa = to_eval[self.all_names.index('PA')]
 
             if 'vis' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
+                sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
                 model_vis = self.modelim_ivis(visuv, ttype=ttype)
                 # model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
                 # vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
@@ -646,7 +351,7 @@ class KerrBam:
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'amp' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval[9]*amp)**2.0+to_eval[10]**2.0)
+                sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
                 model_amp = np.abs(self.modelim_ivis(ampuv, ttype=ttype))
                 # model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
                 # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
@@ -689,7 +394,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(res.x[self.modeled_names.index(name)])
-        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype,exacttype=self.exacttype, r_interp=self.r_interp,tautot_interp=self.tautot_interp,psit_interp=self.psit_interp, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], thetabz=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
         
@@ -781,7 +486,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(mean[self.modeled_names.index(name)])
-        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype,exacttype=self.exacttype, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], thetabz=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -801,7 +506,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(sample[self.modeled_names.index(name)])
-        new = Bam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], thetabz=to_eval[7], spec=to_eval[8], f=to_eval[9], e=to_eval[10], calctype=self.calctype,approxtype=self.approxtype,exacttype=self.exacttype, r_interp=self.r_interp,tautot_interp=self.tautot_interp,psit_interp=self.psit_interp, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], thetabz=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 

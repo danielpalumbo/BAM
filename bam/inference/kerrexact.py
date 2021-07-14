@@ -79,19 +79,25 @@ def R(r, a, lam, eta):
     return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (lam + (a-lam)**2)
 
 
-def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True, interps = None):
+def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, interps = None):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
     if interp:
         K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints = interps
-    
+        fobs_inner_int_real, fobs_inner_int_imag = fobs_inner_ints
+        sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag = sn_inner_ints
+
+    zeros = np.zeros_like(rho)
+    npix = len(zeros)
+    rp = 1+np.sqrt(1-a**2)
     alpha = rho*np.cos(varphi)
     beta = rho*np.sin(varphi)
     lam, eta = get_lam_eta(alpha,beta, inc, a)
     lam = np.complex128(lam)
     eta = np.complex128(eta)
     up, um = get_up_um(lam, eta, a)
+    urat = np.minimum(np.real(up/um),1)
     r1, r2, r3, r4 = get_radroots(lam, eta, a)
     crit_mask = np.abs(np.imag(r3))>1e-14
     r31 = r3-r1
@@ -99,7 +105,19 @@ def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True
     r42 = r4-r2
     r41 = r4-r1
     k = r32*r41 / (r31*r42)
+
+    fluid_eta = chi+np.pi
+    bz = np.cos(thetabz)
+    beq = np.sqrt(1-bz**2)
+    br = beq*np.cos(fluid_eta)
+    bphi = beq*np.sin(fluid_eta)
+    
+    bvec = np.array([br, bphi, bz])
+
     if interp:
+
+        r31_phase = np.angle(r31)
+        delta321_phase = np.angle(r32) - np.angle(r31)
         Fobs = np.complex128(Fobs_int(np.arcsin(np.cos(inc)/np.sqrt(up)), urat))
         fobs = np.complex128(np.ones_like(rho))
         fobs[~crit_mask] = np.complex128(fobs_outer_int(np.real(np.arcsin(np.sqrt(r31/r41)[~crit_mask])), np.real(k[~crit_mask])))
@@ -131,7 +149,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True
     #even though we are inside the critical curve, we will use the outer fobs interpolator since the args are real
     Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*ef(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
     Ir_total[eta<0] = np.nan
-
+    
     signpr = np.ones_like(Ir_turn)
 
 
@@ -143,14 +161,21 @@ def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True
     qvecs = []
     uvecs = []
     ivecs = []
+    redshifts = []
     # plowered = []
     # praised = []
+    lam=np.real(lam)
+    eta=np.real(eta)
     for n in range(nmax+1):
         m += 1
         if interp:
             Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(K_int(urat)) - np.sign(beta)*Fobs))
         else:
             Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(ef(np.pi/2, up/um)) - np.sign(beta)*Fobs))
+        # plt.imshow((Ir-Ir_total).reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('Ir')
+        # plt.show()
         signpr[~crit_mask] = np.sign(Ir_turn-Ir)[~crit_mask]
         signptheta = (-1)**m * np.sign(beta)
 
@@ -172,20 +197,43 @@ def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True
         # snnum[~crit_mask] = np.complex128(sn_outer_int((ffac*Ir-fobs)[~crit_mask], k[~crit_mask]))
         snsqr = snnum**2
         
-        rr = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
+        r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
         r[eta<0] =np.nan
         r[Ir>Ir_total] = np.nan
+        plt.imshow(r.reshape((100,100)))
+        plt.colorbar()
+        plt.title('r')
+        plt.show()
         # rs.append(r)
-        rvecs.append(r)
+        rvecs.append(np.nan_to_num(r))
         bigR = R(r, a, lam, eta)
         bigDelta = Delta(r, a)
+        bigXi = Xi(r, a, inc)
+        littleomega = omega(r, a, inc)
+        # plt.imshow(bigR.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('R')
+        # plt.show()
+        # plt.imshow(bigDelta.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('Delta')
+        # plt.show()
+        # plt.imshow(bigXi.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('Xi')
+        # plt.show()
+        # plt.imshow(littleomega.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('omega')
+        # plt.show()
 
         #lowered
-        pt_low = -1
+        pt_low = -1*np.ones_like(r)
         pr_low = signpr * np.sqrt(bigR)/bigDelta
+        # print(np.sum(np.isnan(pr_low)))
         pphi_low = lam
         ptheta_low = signptheta*np.sqrt(eta)
-        plowers = np.array([pt_low, pr_low, ptheta_low, pphi_low])
+        plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
         # plowered.append([pt_low, pr_low, pphi_low, ptheta_low])
 
         #raised
@@ -194,24 +242,41 @@ def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True
         pphi = 1/r**2 * (-(a-lam)+a/Delta(r,a)*(r**2+a**2 - a*lam))
         ptheta = signptheta*np.sqrt(eta) / r**2
         # praised.append([pt_up, pr_up, pphi_up, ptheta_up])
+        # plt.imshow(np.real(pt.reshape((100,100))))
+        # plt.colorbar()
+        # plt.title('pt')
+        # plt.show()
+        # plt.imshow(np.real(pr.reshape((100,100))))
+        # plt.colorbar()
+        # plt.title('pr')
+        # plt.show()
+        # plt.imshow(np.real(ptheta.reshape((100,100))))
+        # plt.colorbar()
+        # plt.title('ptheta')
+        # plt.show()
+        # plt.imshow(np.real(pphi.reshape((100,100))))
+        # plt.colorbar()
+        # plt.title('pphi')
+        # plt.show()
 
 
         #now everything to generate polarization
-        emutetrad = np.array([[1/r*np.sqrt(Xi/d), 0, 0, omega/r*np.sqrt(Xi/d)], [0, np.sqrt(d)/r, 0, 0], [0, 0, 0, r/np.sqrt(Xi)], [0, 0, -1/r, 0]])
+        
+        emutetrad = np.array([[1/r*np.sqrt(bigXi/bigDelta), zeros, zeros, littleomega/r*np.sqrt(bigXi/bigDelta)], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
 
-        coschi = np.cos(chi)
-        sinchi = np.sin(chi)
 
         # #fluid frame tetrad
-        coordtransform = np.matmul(np.matmul(minkmetric, getlorentzboost(-beta, chi)), emutetrad)
-        coordtransforminv = np.transpose(np.matmul(getlorentzboost(-beta, chi), emutetrad))
+        coordtransform = np.matmul(np.matmul(minkmetric, getlorentzboost(boost, chi)), emutetrad)
+        coordtransforminv = np.transpose(np.matmul(getlorentzboost(boost, chi), emutetrad))
 
+        # print(coordtransform[0])
         # #lowered momenta at source
         # signpr = 1 if setman==True else getsignpr(b, spin, theta0, varphi, mbar)
         # plowers = np.array([-1, signpr * np.sqrt(RR)/d, np.sign(np.cos(theta0))*((-1)**(mbar+1))*np.sqrt(eta0), lam])
 
         rs = r
-
+        # print('r',r.shape)
+        
         #raised
         # pt = 1 / (rs**2) * (-spin * (spin - lam) + (rs**2 + spin**2) * (rs**2 + spin**2 - spin * lam) / d)
         # pr = signpr * np.sqrt(RR) / rs**2
@@ -219,22 +284,64 @@ def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True
         # pphi = 1/(rs**2) * (-(spin -lam) + (spin * (rs**2 + spin**2 - spin * lam)) / d)
 
         #fluid frame momenta
-        pupperfluid = np.matmul(coordtransform, plowers)
-        redshift = 1 / (pupperfluid[0])
-
-        lp = pupperfluid[0]/pupperfluid[3]
-
+        # print(plowers.shape)
+        # print(coordtransform.shape)
+        # print(coordtransform)
+        # print(plowers[0])
+        # print(plowers.shape)
+        # print(coordtransform.shape)
+        # print(coordtransform[:,:,0])
+        pupperfluid = np.matmul(coordtransform.T, plowers)
+        # print(pupperfluid.shape)
+        redshift = 1 / (pupperfluid[:,0,0])
+        # plt.imshow(redshift.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('g')
+        # plt.show()
+        # print('redshift',redshift.shape)
+        # print(pupperfluid[1:])
+        # print(pupperfluid.shape)
+        # plt.imshow(pupperfluid[:,0,0].reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('pupperft')
+        # plt.show()
+        # plt.imshow(pupperfluid[:,3,0].reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('pupperfz')
+        # plt.show()
+        lp = pupperfluid[:,0,0]/pupperfluid[:,3,0]
+        plt.imshow(lp.reshape((100,100)))
+        plt.colorbar()
+        plt.title('lp')
+        plt.show()
+        # print('lp',lp.shape)
         #fluid frame polarization
-        fupperfluid = np.cross(pupperfluid[1:], bvec)
-        fupperfluid = (np.insert(fupperfluid, 0, 0)) / (np.linalg.norm(pupperfluid[1:]))
-
+        # print(pupperfluid[1:])
+        # print(bvec)
+        pspatialfluid = pupperfluid[:,1:]
+        # print(pspatialfluid.shape)
+        # print(pspatialfluid)
+        fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
+        # print(fupperfluid.shape)
+        fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
+        # print(fupperfluid.shape)
+        fupperfluid = np.swapaxes(fupperfluid, 1,2)
+        # print(fupperfluid.shape)
+        # print(coordtransforminv.shape)
         #apply the tetrad to get kerr f
         kfuppers = np.matmul(coordtransforminv, fupperfluid)
-        kft = kfuppers[0]
-        kfr = kfuppers[1]
-        kftheta = kfuppers[2]
-        kfphi = kfuppers[3]
+        # print("Just computed kfuppers")
+        # print(kfuppers.shape)
+        kft = kfuppers[:,0,0]
+        kfr = kfuppers[:,1,0]
+        kftheta = kfuppers[:,2,0]
+        kfphi = kfuppers[:, 3,0]
+        # print(kft.shape)
+        # print(kfr.shape)
+        # print(kftheta.shape)
+        # print(kfphi.shape)
 
+        spin = a
         #kappa1 and kappa2
         AA = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
         BB = (rs**2 + spin**2) * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
@@ -242,17 +349,50 @@ def kerr_exact(rho, varphi, inc, a, nmax, beta, chi, br, bphi, bz, interp = True
         kappa2 = -rs * BB
 
         #screen appearance
-        nu = -(alpha + spin * np.sin(theta0))
+        nu = -(alpha + spin * np.sin(inc))
+        # print(nu.shape)
+
         ealpha = (beta * kappa2 - nu * kappa1) / (nu**2 + beta**2)
         ebeta = (beta * kappa1 + nu * kappa2) / (nu**2 + beta**2)
-        # intensity = redshift**4 * (ealpha**2 + ebeta**2) * lp
-        qvec = -(ealpha**2 - ebeta**2) * lp
-        uvec = -2*ealpha*ebeta * lp
-        ivec = np.sqrt(q**2+u**2)
-        qvecs.append(qvec)
-        uvecs.append(uvec)
-        ivecs.append(ivec)
-        redshifts.append(redshift)
+        # plt.imshow(ealpha.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('ealpha')
+        # plt.show()
+        # plt.imshow(ebeta.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('ebeta')
+        # plt.show()
+        # intensity = (ealpha**2 + ebeta**2) * lp
+        # angle = np.arctan2(ebeta, ealpha)
+        # qvec = intensity*np.cos(2*angle)
+        # uvec = intensity*np.sin(2*angle)
+        # ivec = intensity
+
+        qvec = (ealpha**2 - ebeta**2) * lp
+        uvec = 2*ealpha*ebeta * lp
+        ivec = np.sqrt(qvec**2+uvec**2)
+        
+        # plt.imshow(qvec.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('q')
+        # plt.show()
+        # plt.imshow(uvec.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('u')
+        # plt.show()
+        # plt.imshow(ivec.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('i')
+        # plt.show()
+        qvecs.append(np.real(np.nan_to_num(qvec)))
+        uvecs.append(np.real(np.nan_to_num(uvec)))
+        ivecs.append(np.real(np.nan_to_num(ivec)))
+        redshifts.append(np.real(np.nan_to_num(redshift)))
+
+        plt.imshow(redshift.reshape((100,100)))
+        plt.colorbar()
+        plt.title('redshift')
+        plt.show()
         # if ebeta == 0 and not use2:
         #     angle = np.pi/2
 
@@ -382,106 +522,10 @@ def kerr_interpolative(rho, varphi, inc, a, nmax, K_int, Fobs_int, fobs_outer_in
 
 
 
-#gets kappa and EVPA - a lot from Daniel's kappa script
-def getevec(r, spin, plowers, puppers, theta0, beta, chi, bvec, normalret=True, use2=True, setman=False, retnew=False, retf=False):
-    # alpha = b * np.cos(varphi)
-    # beta = b * np.sin(varphi)
-    # eta0 = beta**2 + (alpha**2 - spin**2) * (np.cos(theta0))**2
-
-
-    # if np.min(eta0) <= 0:
-    #     print('vortical')
-    
-    # d = r**2 - 2 * r + spin**2
-    # Xi = (r**2 + spin**2)**2 - d * spin**2
-    # omega = 2 * spin * r / Xi
-    # sigma = r**2
-    # lam = -alpha * np.sin(theta0)
-    # eta0 = beta**2 + (alpha**2 - spin**2) * (np.cos(theta0))**2
-    # RR = (r**2 + spin**2 - spin * lam)**2 - d * (eta0 + (spin - lam)**2)
-    # bvec = np.asarray(bvec)
-    # bvec /= np.linalg.norm(bvec)
-
-    # #zamo frame tetrad
-    emutetrad = np.array([[1/r*np.sqrt(Xi/d), 0, 0, omega/r*np.sqrt(Xi/d)], [0, np.sqrt(d)/r, 0, 0], [0, 0, 0, r/np.sqrt(Xi)], [0, 0, -1/r, 0]])
-
-    # #minkowski metric
-    # coschi = np.cos(chi)
-    # sinchi = np.sin(chi)
-    # minkmetric = np.diag([-1, 1, 1, 1])
-
-    # #fluid frame tetrad
-    coordtransform = np.matmul(np.matmul(minkmetric, getlorentzboost(-eta, chi)), emutetrad)
-    coordtransforminv = np.transpose(np.matmul(getlorentzboost(-boost, chi), emutetrad))
-
-    # #lowered momenta at source
-    # signpr = 1 if setman==True else getsignpr(b, spin, theta0, varphi, mbar)
-    # plowers = np.array([-1, signpr * np.sqrt(RR)/d, np.sign(np.cos(theta0))*((-1)**(mbar+1))*np.sqrt(eta0), lam])
-
-    # rs = r
-
-    #raised
-    # pt = 1 / (rs**2) * (-spin * (spin - lam) + (rs**2 + spin**2) * (rs**2 + spin**2 - spin * lam) / d)
-    # pr = signpr * np.sqrt(RR) / rs**2
-    # ptheta = np.sign(np.cos(theta0))*((-1)**(mbar+1))*np.sqrt(eta0) / rs**2
-    # pphi = 1/(rs**2) * (-(spin -lam) + (spin * (rs**2 + spin**2 - spin * lam)) / d)
-
-    #fluid frame momenta
-    pupperfluid = np.matmul(coordtransform, plowers)
-    redshift = 1 / (pupperfluid[0])
-
-    lp = 1#pupperfluid[0]/pupperfluid[3]
-
-    #fluid frame polarization
-    fupperfluid = np.cross(pupperfluid[1:], bvec)
-    fupperfluid = (np.insert(fupperfluid, 0, 0)) / (np.linalg.norm(pupperfluid[1:]))
-
-    #apply the tetrad to get kerr f
-    kfuppers = np.matmul(coordtransforminv, fupperfluid)
-    kft = kfuppers[0]
-    kfr = kfuppers[1]
-    kftheta = kfuppers[2]
-    kfphi = kfuppers[3]
-
-    if retf:
-        return ptheta
-
-    #kappa1 and kappa2
-    AA = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
-    BB = (rs**2 + spin**2) * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
-    kappa1 = rs * AA
-    kappa2 = -rs * BB
-    if retnew:
-        return [kappa1, kappa2]
-
-    #screen appearance
-    nu = -(alpha + spin * np.sin(theta0))
-    ealpha = (beta * kappa2 - nu * kappa1) / (nu**2 + beta**2)
-    ebeta = (beta * kappa1 + nu * kappa2) / (nu**2 + beta**2)
-    intensity = redshift**4 * (ealpha**2 + ebeta**2) * lp
-
-    if ebeta == 0 and not use2:
-        angle = np.pi/2
-
-    else:
-        angle = np.arctan2(ebeta, ealpha) if use2==True else -np.arctan(ealpha / ebeta)
-
-    #normbad = ealpha**2+ebeta**2
-    ealpha *= redshift**2*np.sqrt(np.abs(lp))
-    ebeta *= redshift**2*np.sqrt(np.abs(lp))
-
-    # ealpha *= np.sqrt(intensity / normbad)
-    # ebeta *= np.sqrt(intensity / normbad)
-
-    return [intensity, angle] if normalret == True else [ealpha, ebeta]
-
-
-
-
 def build_Fobs_interpolator(Fobs_angle, urat):
     FF, uu = np.meshgrid(Fobs_angle, urat)
     Fobs = np.real(ef(FF, uu))
-    Fobs_int_base = interp2d(Fobsangle, urat, Fobs)#, bounds_error=False, fill_value=0)
+    Fobs_int_base = interp2d(Fobs_angle, urat, Fobs)#, bounds_error=False, fill_value=0)
     Fobs_int = lambda x, y: si.dfitpack.bispeu(Fobs_int_base.tck[0], Fobs_int_base.tck[1], Fobs_int_base.tck[2], Fobs_int_base.tck[3], Fobs_int_base.tck[4], x, y)[0]
     return Fobs_int
 
@@ -492,7 +536,7 @@ def build_K_interpolator(urat):
 def build_fobs_outer_interpolator(fobs_angle, k):
     ff, kk = np.meshgrid(fobs_angle, k)
     fobs = np.real(ef(ff, kk))
-    fobs_int_base = interp2d(fobsangle, k, fobs)#, bounds_error=False, fill_value=0)
+    fobs_int_base = interp2d(fobs_angle, k, fobs)#, bounds_error=False, fill_value=0)
     fobs_int = lambda x, y: si.dfitpack.bispeu(fobs_int_base.tck[0], fobs_int_base.tck[1], fobs_int_base.tck[2], fobs_int_base.tck[3], fobs_int_base.tck[4], x, y)[0]
     return fobs_int
 
@@ -562,39 +606,42 @@ def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
 
     return [sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag]
 
-def build_all_interpolators():
+def build_all_interpolators(ngrid=50):
     """
     For now, a bunch of magic numbers that give decent interpolators for reasonable FOVs and resolutions.
     """
 
-    ngrid = 100
     k = np.linspace(0,1,ngrid)
-    fobsangle = np.linspace(0, np.pi/2,ngrid)
-    fobs_outer_int = build_fobs_outer_interpolator(fobsangle, k)
-    print("Built fobs outer interpolator.")
+    fobs_angle = np.linspace(0, np.pi/2,ngrid)
+    print("Building fobs outer interpolator...")
+    fobs_outer_int = build_fobs_outer_interpolator(fobs_angle, k)
+    
     r31_phase = np.linspace(-np.pi,np.pi,ngrid)
     delta321_phase = np.linspace(-np.pi,np.pi,ngrid)
+    print("Building fobs inner interpolators...")
     fobs_inner_ints = build_fobs_inner_interpolators(r31_phase, delta321_phase)
-    print("Built fobs inner interpolators.")
-
+    
     urat = np.linspace(-60,1,ngrid)
-    Fobsangle = np.linspace(0, np.pi/2,ngrid)
-    Fobs_int = build_Fobs_interpolator(Fobsangle, urat)
-    print("Built Fobs interpolator.")
+    Fobs_angle = np.linspace(0, np.pi/2,ngrid)
+    print("Building Fobs interpolator...")
+
+    Fobs_int = build_Fobs_interpolator(Fobs_angle, urat)
+    
+    print("Building K interpolator...")
     K_int = build_K_interpolator(urat)
-    print("Built K interpolator.")
+    print("Building sn outer interpolator...")
     ffacIr_fobs_diff = np.linspace(-5,10,ngrid)
     sn_outer_int = build_sn_outer_interpolator(ffacIr_fobs_diff, k)
-    print("Built sn outer interpolator.")
+    print("Building sn inner interpolators...")
     A = np.linspace(0,3,ngrid)
     sn_inner_ints = build_sn_inner_interpolators(A, r31_phase, delta321_phase)
-    print("Built sn inner interpolators.")
+    # print("Built sn inner interpolators.")
     return K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints
 
 
 #first, make lorentz transformation matrix
 def getlorentzboost(boost, chi):
-    gamma = 1 / np.sqrt(1 - boost**2)
+    gamma = 1 / np.sqrt(1 - boost**2) 
     coschi = np.cos(chi)
     sinchi = np.sin(chi)
     lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, 0],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, 0],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, 0],[0,0,0,1]])

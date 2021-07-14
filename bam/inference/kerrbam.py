@@ -10,7 +10,7 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
-from kerrexact import kerr_exact, kerr_interpolative, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
+from bam.inference.kerrexact import kerr_exact, kerr_interpolative, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 
@@ -141,39 +141,40 @@ class KerrBam:
         if self.mode == 'fixed':
             self.imparams = [self.M, self.D, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
             self.rhovec = D/(M*Mscale*Gpercsq*self.MUDISTS)
-            if self.exacttype=='interp' and all([not(self.r_interp == None),not(self.tautot_interp == None),not (self.psit_interp==None)]):
+            if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
                 print("Fixed Bam: precomputing all subimages.")
                 self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
                 # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
             else:
-                print("Can't precompute subimages without interpolators!")
+                print("Can't precompute subimages without all interpolators!")
         self.modelim = None
         if self.exacttype=='interp':
-            for i in range(len(all_interp_names)):
+            for i in range(len(self.all_interp_names)):
                 if self.all_interps[i] is None:
-                    print(all_interp_names[i]+' does not have a specified interpolator!')
+                    print(self.all_interp_names[i]+' does not have a specified interpolator!')
             
-        print("Finished building Bam! in "+ self.mode +" mode with calctype " +self.calctype)
+        print("Finished building KerrBam! in "+ self.mode +" mode with exacttype " +self.exacttype)
 
-    def guess_new_interpolators(self):
+    def guess_new_interpolators(self, ngrid=50):
         """
         Given known model parameters or prior ranges,
         specify a reasonable range of rho values and compute
         new interpolators.
         """
         print("Building all new interpolators from reasonable numbers (PLACEHOLDER FUNCTIONALITY)")
-        K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints = build_all_interpolators()
+        K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints = build_all_interpolators(ngrid=ngrid)
         self.K_int = K_int
         self.Fobs_int = Fobs_int
         self.fobs_outer_int = fobs_outer_int
         self.fobs_inner_ints = fobs_inner_ints
         self.sn_outer_int = sn_outer_int
         self.sn_inner_ints = sn_inner_ints
-        print("FInished building all interpolators.")
+        self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
+        print("Finished building all interpolators.")
                             
     def save_interpolators(self, outname=''):
-        for i in range(len(all_interp_names)):
-            with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
+        for i in range(len(self.all_interp_names)):
+            with open(outname+self.all_interp_names[i]+'.pkl','wb') as myfile:
                 pkl.dump(self.all_interps[i], myfile)
             # if type(self.all_interps[i]) is list:
             #     for j in range(len(self.all_interps[i])):
@@ -184,9 +185,10 @@ class KerrBam:
             #         pkl.dump(self.all_interps[i], myfile)
 
     def load_interpolators(self, outname=''):
-        for i in range(len(all_interp_names)):
-            with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','rb') as myfile:
+        for i in range(len(self.all_interp_names)):
+            with open(outname+self.all_interp_names[i]+'.pkl','rb') as myfile:
                 self.all_interps[i] = pkl.load(myfile)
+        self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints = self.all_interps
             # if 'inner' in all_interp_names[i]:
             #     self.all_interps[i] = []
             #     if 'fobs' in all_interp_names[i]:
@@ -214,29 +216,29 @@ class KerrBam:
         """
         M, D, a, inc, zbl, PA, beta, chi, thetabz, spec, jargs = imparams
 
-        # self.M = M
-        #this is the end of the problem setup;
-        #everything after this point should bifurcate depending on calctype
-
-         # def rho_conv(r, phi, D, theta0, r_g):
-        #     rho2 = (((r/D)**2.0)*(1.0 - ((sin(theta0)**2.0)*(sin(phi)**2.0)))) + ((2.0*r*r_g/(D**2.0))*((1.0 + (sin(theta0)*sin(phi)))**2.0))
-        #     rho = sqrt(rho2)
-        #     return rho
-
-        # def emission_coordinates(rho, varphi):
+        
         #convert mudists to gravitational units
         rhovec = D / (M*self.Mscale*Gpercsq) * self.MUDISTS
         
         if self.exacttype == 'interp':
-            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, interp=True, [self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints])
+            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, thetabz, interp=True, interps = [self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints])
         elif self.exacttype == 'exact':
-            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, interp=False)
+            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, thetabz, interp=False)
             
         for n in range(self.nmax+1):
             profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+self.spec)
-            ivecs[n]*=profile
-            qvecs[n]*=profile
-            uvecs[n]*=profile
+            plt.imshow(profile.reshape((100,100)))
+            plt.colorbar()
+            plt.title('redshift*profile')
+            plt.show()
+            if self.polflux:
+                ivecs[n]*=profile
+                qvecs[n]*=profile
+                uvecs[n]*=profile
+            else:
+                ivecs[n] = profile
+                qvecs[n] = ivecs[n]*0
+                uvecs[n] = ivecs[n]*0
 
         tf = np.sum(ivecs)
         ivecs = [ivec*zbl/tf for ivec in ivecs]
@@ -525,6 +527,7 @@ class KerrBam:
             self.ivecs
         except:
             self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
+        
                 
         # imparams = self.all_params[:9] + [self.all_params[11:]]
         # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)

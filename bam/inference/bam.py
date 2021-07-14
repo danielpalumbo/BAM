@@ -462,6 +462,10 @@ class Bam:
             
                 
             pathlength = np.abs(kFthat/kFzhat)
+            plt.imshow(pathlength.reshape((100,100)))
+            plt.colorbar()
+            plt.title('pathlength')
+            plt.show()
             mag = polarizedintensity*pathlength
             # self.test(pathlength, out='pathlength'+str(n))
             # self.test(mag, out='mag'+str(n))

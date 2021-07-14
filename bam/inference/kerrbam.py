@@ -10,7 +10,7 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
-from bam.inference.kerrexact import kerr_exact, kerr_interpolative, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
+from bam.inference.kerrexact import kerr_exact, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 
@@ -227,10 +227,6 @@ class KerrBam:
             
         for n in range(self.nmax+1):
             profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+self.spec)
-            plt.imshow(profile.reshape((100,100)))
-            plt.colorbar()
-            plt.title('redshift*profile')
-            plt.show()
             if self.polflux:
                 ivecs[n]*=profile
                 qvecs[n]*=profile

@@ -97,7 +97,11 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
     lam = np.complex128(lam)
     eta = np.complex128(eta)
     up, um = get_up_um(lam, eta, a)
-    urat = np.minimum(np.real(up/um),1)
+    urat = np.clip(np.real(up/um),-1, 1)
+    # plt.imshow(urat.reshape((100,100)))
+    # plt.colorbar()
+    # plt.title('urat')
+    # plt.show()
     r1, r2, r3, r4 = get_radroots(lam, eta, a)
     crit_mask = np.abs(np.imag(r3))>1e-14
     r31 = r3-r1
@@ -200,10 +204,10 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
         r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
         r[eta<0] =np.nan
         r[Ir>Ir_total] = np.nan
-        plt.imshow(r.reshape((100,100)))
-        plt.colorbar()
-        plt.title('r')
-        plt.show()
+        # plt.imshow(r.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('r')
+        # plt.show()
         # rs.append(r)
         rvecs.append(np.nan_to_num(r))
         bigR = R(r, a, lam, eta)
@@ -263,11 +267,20 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
         #now everything to generate polarization
         
         emutetrad = np.array([[1/r*np.sqrt(bigXi/bigDelta), zeros, zeros, littleomega/r*np.sqrt(bigXi/bigDelta)], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
-
-
+        # print(emutetrad.shape)
+        emutetrad = np.transpose(emutetrad,(2,0,1))
+        boostmatrix = getlorentzboost(-boost, chi)
+        # print(boostmatrix)
+        # print(boostmatrix.shape)
+        # print(np.matmul(minkmetric, boostmatrix))
+        # print(np.matmul(minkmetric, boostmatrix).shape)
+        # print(np.matmul())
         # #fluid frame tetrad
-        coordtransform = np.matmul(np.matmul(minkmetric, getlorentzboost(boost, chi)), emutetrad)
-        coordtransforminv = np.transpose(np.matmul(getlorentzboost(boost, chi), emutetrad))
+        coordtransform = np.matmul(np.matmul(minkmetric, boostmatrix), emutetrad)
+        coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
+        # print('inv',coordtransforminv.shape)
+        # coordtransform = np.matmul(getlorentzboost(boost, chi), emutetrad)
+        # coordtransforminv = np.transpose(np.matmul(getlorentzboost(boost, chi), emutetrad))
 
         # print(coordtransform[0])
         # #lowered momenta at source
@@ -284,14 +297,17 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
         # pphi = 1/(rs**2) * (-(spin -lam) + (spin * (rs**2 + spin**2 - spin * lam)) / d)
 
         #fluid frame momenta
-        # print(plowers.shape)
+        # print('plowers',plowers.shape)
         # print(coordtransform.shape)
         # print(coordtransform)
         # print(plowers[0])
         # print(plowers.shape)
-        # print(coordtransform.shape)
+        # print('coordtransform',coordtransform.shape)
+        # print(coordtransform.T[0])
+        # print(plowers[0])
+        # print(np.matmul(coordtransform.T[0],plowers[0]))
         # print(coordtransform[:,:,0])
-        pupperfluid = np.matmul(coordtransform.T, plowers)
+        pupperfluid = np.matmul(coordtransform, plowers)
         # print(pupperfluid.shape)
         redshift = 1 / (pupperfluid[:,0,0])
         # plt.imshow(redshift.reshape((100,100)))
@@ -303,17 +319,17 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
         # print(pupperfluid.shape)
         # plt.imshow(pupperfluid[:,0,0].reshape((100,100)))
         # plt.colorbar()
-        # plt.title('pupperft')
+        # plt.title('kerr kFthat')
         # plt.show()
         # plt.imshow(pupperfluid[:,3,0].reshape((100,100)))
         # plt.colorbar()
-        # plt.title('pupperfz')
+        # plt.title('kerr kFzhat')
         # plt.show()
-        lp = pupperfluid[:,0,0]/pupperfluid[:,3,0]
-        plt.imshow(lp.reshape((100,100)))
-        plt.colorbar()
-        plt.title('lp')
-        plt.show()
+        lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
+        # plt.imshow(lp.reshape((100,100)))
+        # plt.colorbar()
+        # plt.title('lp')
+        # plt.show()
         # print('lp',lp.shape)
         #fluid frame polarization
         # print(pupperfluid[1:])
@@ -368,8 +384,8 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
         # uvec = intensity*np.sin(2*angle)
         # ivec = intensity
 
-        qvec = (ealpha**2 - ebeta**2) * lp
-        uvec = 2*ealpha*ebeta * lp
+        qvec = -(ealpha**2 - ebeta**2) * lp
+        uvec = -2*ealpha*ebeta * lp
         ivec = np.sqrt(qvec**2+uvec**2)
         
         # plt.imshow(qvec.reshape((100,100)))
@@ -389,10 +405,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
         ivecs.append(np.real(np.nan_to_num(ivec)))
         redshifts.append(np.real(np.nan_to_num(redshift)))
 
-        plt.imshow(redshift.reshape((100,100)))
-        plt.colorbar()
-        plt.title('redshift')
-        plt.show()
         # if ebeta == 0 and not use2:
         #     angle = np.pi/2
 
@@ -411,114 +423,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
 
 
     return rvecs, ivecs, qvecs, uvecs, redshifts
-
-
-
-def kerr_interpolative(rho, varphi, inc, a, nmax, K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints):
-    """
-    Numerical: get rs from rho, varphi, inc, a, and subimage index n, interpolatively.
-    """
-    rp = 1+np.sqrt(1-a**2)
-    fobs_inner_int_real, fobs_inner_int_imag = fobs_inner_ints
-    sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag = sn_inner_ints
-
-    alpha = rho*np.cos(varphi)
-    beta = rho*np.sin(varphi)
-    lam, eta = get_lam_eta(alpha,beta, inc, a)
-    lam = np.complex128(lam)
-    eta = np.complex128(eta)
-    up, um = get_up_um(lam, eta, a)
-    up[eta<0] = np.nan
-    urat = np.minimum(np.real(up/um),1)
-    r1, r2, r3, r4 = get_radroots(lam, eta, a)
-
-    r31 = r3-r1
-    r32 = r3-r2
-    r42 = r4-r2
-    r41 = r4-r1
-    # r1 = np.real(r1)
-    # r2 = np.real(r2)
-    crit_mask = np.abs(np.imag(r3))>1e-14
-
-    k = r32*r41 / (r31*r42)
-    print(np.any(np.real(k)<0))
-    r31_phase = np.angle(r31)
-    delta321_phase = np.angle(r32) - np.angle(r31)
-    Fobs = np.complex128(Fobs_int(np.arcsin(np.cos(inc)/np.sqrt(up)), urat))
-    fobs = np.complex128(np.ones_like(rho))
-    fobs[~crit_mask] = np.complex128(fobs_outer_int(np.real(np.arcsin(np.sqrt(r31/r41)[~crit_mask])), np.real(k[~crit_mask])))
-    fobs[crit_mask] = fobs_inner_int_real(r31_phase[crit_mask], delta321_phase[crit_mask]) + 1j*fobs_inner_int_imag(r31_phase[crit_mask], delta321_phase[crit_mask])
-    
-    #build mino time precursor values:
-    #see appendix A of G+L lensing
-    Ir_turn = np.real(2/np.sqrt(r31*r42)*fobs)
-    
-    # real_rp_rat = (rp-np.real(r4[~crit_mask])) / (rp-np.real(r3[~crit_mask])) * np.real(r31/r41)[~crit_mask]
-    # print(np.max(real_rp_rat))
-    # print(np.min(real_rp_rat))
-    # I2r_angle = np.arcsin(np.sqrt(real_rp_rat))
-    # I2r = fobs_outer_int(I2r_angle, np.real(k)[~crit_mask])
-    Ir_total = 2*Ir_turn
-    # Ir_total[~crit_mask] -= I2r
-
-    Agl = np.real(np.sqrt(r32*r42)[crit_mask])
-    Bgl = np.real(np.sqrt(r31*r41)[crit_mask])
-    k3 = ((Agl+Bgl)**2 - np.real(r2-r1)[crit_mask]**2)/(4*Agl*Bgl)
-    I3r_angle = np.arccos((Agl*(rp-np.real(r1)[crit_mask])-Bgl*(rp-np.real(r2)[crit_mask]))/(Agl*(rp-np.real(r1)[crit_mask])+Bgl*(rp-np.real(r2)[crit_mask])))
-    I3r = fobs_outer_int(I3r_angle, k3)
-    #even though we are inside the critical curve, we will use the outer fobs interpolator since the args are real
-    Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*fobs_outer_int(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
-    Ir_total[eta<0] = np.nan
-    # plt.imshow(Ir_total.reshape((80,80)))
-    # plt.colorbar()
-    # plt.title('Ir total')
-    # plt.show()
-
-    signpr = np.ones_like(Ir_turn)
-
-
-    #everything before here is n-independent
-    #build m array from beta sign and subimage index
-    m = np.sign(beta)
-    m[m>0] = 0
-    rs = []
-    ps = []
-    for n in range(nmax+1):
-        m += 1
-        Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(K_int(urat)) - np.sign(beta)*Fobs))
-        signpr[~crit_mask] = np.sign(Ir_turn-Ir)[~crit_mask]
-        signptheta = (-1)**m * np.sign(beta)
-
-        ffac = 1 / 2 * (r31 * r42)**(1/2)
-        snnum = np.complex128(np.ones_like(rho))
-        snnum[~crit_mask] = np.complex128(sn_outer_int((ffac*Ir-fobs)[~crit_mask], k[~crit_mask]))
-        
-        A = 1/2*np.sqrt(np.abs(r31*r42))*Ir
-        # print(np.min(A))
-
-        sn_xk = sn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*sn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])
-        cndn_xk = cndn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*cndn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])    
-
-        sn_yk = sn_yk_int_real(r31_phase[crit_mask],delta321_phase[crit_mask])+1j*sn_yk_int_imag(r31_phase[crit_mask],delta321_phase[crit_mask])
-        cndn_yk = cndn_yk_int_real(r31_phase[crit_mask],delta321_phase[crit_mask])+1j*cndn_yk_int_imag(r31_phase[crit_mask],delta321_phase[crit_mask])
-        
-        snnum[crit_mask] = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k[crit_mask]*(sn_xk*sn_yk)**2)
-        snsqr = snnum**2
-        
-        r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
-        r[eta<0] =np.nan
-        r[Ir>Ir_total] = np.nan
-        rs.append(r)
-
-        pt = 1/r**2 * (-a*(a-lam) + (r**2+a**2) * (r**2 + a**2 -a * lam) / Delta(r,a))
-        pr = signpr * 1/r**2 * np.sqrt(R(r, a, lam, eta))
-        pphi = 1/r**2 * (-(a-lam)+a/Delta(r,a)*(r**2+a**2 - a*lam))
-        ptheta = signptheta*np.sqrt(eta) / r**2
-        ps.append([pt, pr, pphi, ptheta])
-
-
-    return rs, ps
-
 
 
 
@@ -621,7 +525,7 @@ def build_all_interpolators(ngrid=50):
     print("Building fobs inner interpolators...")
     fobs_inner_ints = build_fobs_inner_interpolators(r31_phase, delta321_phase)
     
-    urat = np.linspace(-60,1,ngrid)
+    urat = np.linspace(-1,1,ngrid)
     Fobs_angle = np.linspace(0, np.pi/2,ngrid)
     print("Building Fobs interpolator...")
 

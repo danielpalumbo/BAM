@@ -52,7 +52,7 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., thetabz=np.pi/2, spec=1., f=0., e=0., exacttype='interp', K_int = None, Fobs_int = None, fobs_outer_int = None, fobs_inner_ints = None, sn_outer_int = None, sn_inner_ints = None, Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, thetabz=np.pi/2, spec=1., f=0., e=0., exacttype='interp', K_int = None, Fobs_int = None, fobs_outer_int = None, fobs_inner_ints = None, sn_outer_int = None, sn_inner_ints = None, Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
         self.periodic=periodic
         self.dynamic=False
         self.source = source
@@ -79,6 +79,7 @@ class KerrBam:
         self.PA = PA
         self.beta = beta
         self.chi = chi
+        self.eta = eta
         self.thetabz = thetabz
         self.spec = spec
         self.f = f
@@ -114,8 +115,8 @@ class KerrBam:
 
         self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
         self.all_interp_names = ['K','Fobs','fobs_outer','fobs_inner','sn_outer','sn_inner']
-        self.all_params = [M, D, a, inc, zbl, PA, beta, chi, thetabz, spec, f, e]+jargs
-        self.all_names = ['M','D','a', 'inc','zbl','PA','beta','chi','thetabz','spec','f','e']+jarg_names
+        self.all_params = [M, D, a, inc, zbl, PA, beta, chi,eta, thetabz, spec, f, e]+jargs
+        self.all_names = ['M','D','a', 'inc','zbl','PA','beta','chi','eta','thetabz','spec','f','e']+jarg_names
         self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
         self.modeled_names = [self.all_names[i] for i in self.modeled_indices]
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
@@ -139,7 +140,7 @@ class KerrBam:
         # self.periodic_indices = [self.modeled_names.index(i) for i in self.periodic_names]
 
         if self.mode == 'fixed':
-            self.imparams = [self.M, self.D, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.thetabz, self.spec, self.jargs]
+            self.imparams = [self.M, self.D, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.thetabz, self.spec, self.jargs]
             self.rhovec = D/(M*Mscale*Gpercsq*self.MUDISTS)
             if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
                 print("Fixed Bam: precomputing all subimages.")
@@ -214,16 +215,16 @@ class KerrBam:
         Given a list of values of modeled parameters in imparams,
         compute the resulting qvec, uvec, ivec, rotimxvec, and rotimyvec.
         """
-        M, D, a, inc, zbl, PA, beta, chi, thetabz, spec, jargs = imparams
+        M, D, a, inc, zbl, PA, beta, chi, eta, thetabz, spec, jargs = imparams
 
         
         #convert mudists to gravitational units
         rhovec = D / (M*self.Mscale*Gpercsq) * self.MUDISTS
         
         if self.exacttype == 'interp':
-            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, thetabz, interp=True, interps = [self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints])
+            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz, interp=True, interps = [self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints])
         elif self.exacttype == 'exact':
-            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, thetabz, interp=False)
+            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz, interp=False)
             
         for n in range(self.nmax+1):
             profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+self.spec)
@@ -328,7 +329,7 @@ class KerrBam:
             #so it should have 11+N parameters where N is the number of jargs
             #M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e + jargs
             #f and e are not used in image computation, so slice around them for now
-            imparams = to_eval[:10] + [to_eval[12:]]
+            imparams = to_eval[:11] + [to_eval[13:]]
             ivecs, qvecs, uvecs = self.compute_image(imparams)#, rotimxvec, rotimyvec 
             out = 0.
             ivec = np.sum(ivecs,axis=0)
@@ -341,7 +342,7 @@ class KerrBam:
             self.modelim.pa = to_eval[self.all_names.index('PA')]
 
             if 'vis' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(sigma**2.0 + (to_eval[11]*amp)**2.0+to_eval[12]**2.0)
                 model_vis = self.modelim_ivis(visuv, ttype=ttype)
                 # model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
                 # vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
@@ -349,7 +350,7 @@ class KerrBam:
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'amp' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(sigma**2.0 + (to_eval[11]*amp)**2.0+to_eval[12]**2.0)
                 model_amp = np.abs(self.modelim_ivis(ampuv, ttype=ttype))
                 # model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
                 # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
@@ -392,7 +393,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(res.x[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], thetabz=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
         
@@ -484,7 +485,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(mean[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], thetabz=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -504,7 +505,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(sample[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[11:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], thetabz=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 

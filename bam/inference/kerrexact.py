@@ -79,7 +79,7 @@ def R(r, a, lam, eta):
     return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (lam + (a-lam)**2)
 
 
-def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, interps = None):
+def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp = True, interps = None):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
@@ -110,7 +110,8 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, thetabz, interp = True, in
     r41 = r4-r1
     k = r32*r41 / (r31*r42)
 
-    fluid_eta = chi+np.pi
+    if fluid_eta is None:
+        fluid_eta = chi+np.pi
     bz = np.cos(thetabz)
     beq = np.sqrt(1-bz**2)
     br = beq*np.cos(fluid_eta)

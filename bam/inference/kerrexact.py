@@ -67,7 +67,7 @@ def Delta(r, a):
     return r**2 - 2*r + a**2
 
 def Xi(r, a, inc):
-    return (r**2+a**2)**2 - Delta(r, a)*np.sin(inc)**2
+    return (r**2+a**2)**2 - Delta(r, a)* a**2 * np.sin(inc)**2
 
 def omega(r, a, inc):
     return 2*a*r/Xi(r, a, inc)
@@ -76,7 +76,7 @@ def Sigma(r, a, inc):
     return r**2 + a**2 * np.cos(inc)**2
 
 def R(r, a, lam, eta):
-    return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (lam + (a-lam)**2)
+    return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (eta + (a-lam)**2)
 
 
 def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp = True, interps = None):
@@ -98,10 +98,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
     eta = np.complex128(eta)
     up, um = get_up_um(lam, eta, a)
     urat = np.clip(np.real(up/um),-1, 1)
-    # plt.imshow(urat.reshape((100,100)))
-    # plt.colorbar()
-    # plt.title('urat')
-    # plt.show()
     r1, r2, r3, r4 = get_radroots(lam, eta, a)
     crit_mask = np.abs(np.imag(r3))>1e-14
     r31 = r3-r1
@@ -134,13 +130,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
 
     Ir_turn = np.real(2/np.sqrt(r31*r42)*fobs)
     
-    # real_rp_rat = (rp-np.real(r4[~crit_mask])) / (rp-np.real(r3[~crit_mask])) * np.real(r31/r41)[~crit_mask]
-    # print(np.max(real_rp_rat))
-    # print(np.min(real_rp_rat))
-    # I2r_angle = np.arcsin(np.sqrt(real_rp_rat))
-    # I2r = fobs_outer_int(I2r_angle, np.real(k)[~crit_mask])
     Ir_total = 2*Ir_turn
-    # Ir_total[~crit_mask] -= I2r
 
     Agl = np.real(np.sqrt(r32*r42)[crit_mask])
     Bgl = np.real(np.sqrt(r31*r41)[crit_mask])
@@ -167,8 +157,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
     uvecs = []
     ivecs = []
     redshifts = []
-    # plowered = []
-    # praised = []
     lam=np.real(lam)
     eta=np.real(eta)
     for n in range(nmax+1):
@@ -177,10 +165,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
             Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(K_int(urat)) - np.sign(beta)*Fobs))
         else:
             Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(ef(np.pi/2, up/um)) - np.sign(beta)*Fobs))
-        # plt.imshow((Ir-Ir_total).reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('Ir')
-        # plt.show()
         signpr[~crit_mask] = np.sign(Ir_turn-Ir)[~crit_mask]
         signptheta = (-1)**m * np.sign(beta)
 
@@ -199,47 +183,26 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
             snnum[crit_mask] = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k[crit_mask]*(sn_xk*sn_yk)**2)
         else:
             snnum = np.complex128(sn(ffac*Ir-fobs,k))
-        # snnum[~crit_mask] = np.complex128(sn_outer_int((ffac*Ir-fobs)[~crit_mask], k[~crit_mask]))
         snsqr = snnum**2
         
         r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
         r[eta<0] =np.nan
         r[Ir>Ir_total] = np.nan
-        # plt.imshow(r.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('r')
-        # plt.show()
-        # rs.append(r)
         rvecs.append(np.nan_to_num(r))
         bigR = R(r, a, lam, eta)
         bigDelta = Delta(r, a)
         bigXi = Xi(r, a, inc)
         littleomega = omega(r, a, inc)
-        # plt.imshow(bigR.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('R')
-        # plt.show()
-        # plt.imshow(bigDelta.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('Delta')
-        # plt.show()
-        # plt.imshow(bigXi.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('Xi')
-        # plt.show()
-        # plt.imshow(littleomega.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('omega')
-        # plt.show()
 
         #lowered
         pt_low = -1*np.ones_like(r)
         pr_low = signpr * np.sqrt(bigR)/bigDelta
+        pr_low[pr_low>10] = 10
+        pr_low[pr_low<-10] = -10
         # print(np.sum(np.isnan(pr_low)))
         pphi_low = lam
         ptheta_low = signptheta*np.sqrt(eta)
         plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
-        # plowered.append([pt_low, pr_low, pphi_low, ptheta_low])
 
         #raised
         pt = 1/r**2 * (-a*(a-lam) + (r**2+a**2) * (r**2 + a**2 -a * lam) / bigDelta)
@@ -247,117 +210,31 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
         pphi = 1/r**2 * (-(a-lam)+a/Delta(r,a)*(r**2+a**2 - a*lam))
         ptheta = signptheta*np.sqrt(eta) / r**2
         # praised.append([pt_up, pr_up, pphi_up, ptheta_up])
-        # plt.imshow(np.real(pt.reshape((100,100))))
-        # plt.colorbar()
-        # plt.title('pt')
-        # plt.show()
-        # plt.imshow(np.real(pr.reshape((100,100))))
-        # plt.colorbar()
-        # plt.title('pr')
-        # plt.show()
-        # plt.imshow(np.real(ptheta.reshape((100,100))))
-        # plt.colorbar()
-        # plt.title('ptheta')
-        # plt.show()
-        # plt.imshow(np.real(pphi.reshape((100,100))))
-        # plt.colorbar()
-        # plt.title('pphi')
-        # plt.show()
-
-
         #now everything to generate polarization
         
         emutetrad = np.array([[1/r*np.sqrt(bigXi/bigDelta), zeros, zeros, littleomega/r*np.sqrt(bigXi/bigDelta)], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
-        # print(emutetrad.shape)
         emutetrad = np.transpose(emutetrad,(2,0,1))
         boostmatrix = getlorentzboost(-boost, chi)
-        # print(boostmatrix)
-        # print(boostmatrix.shape)
-        # print(np.matmul(minkmetric, boostmatrix))
-        # print(np.matmul(minkmetric, boostmatrix).shape)
-        # print(np.matmul())
-        # #fluid frame tetrad
+        #fluid frame tetrad
         coordtransform = np.matmul(np.matmul(minkmetric, boostmatrix), emutetrad)
         coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
-        # print('inv',coordtransforminv.shape)
-        # coordtransform = np.matmul(getlorentzboost(boost, chi), emutetrad)
-        # coordtransforminv = np.transpose(np.matmul(getlorentzboost(boost, chi), emutetrad))
-
-        # print(coordtransform[0])
-        # #lowered momenta at source
-        # signpr = 1 if setman==True else getsignpr(b, spin, theta0, varphi, mbar)
-        # plowers = np.array([-1, signpr * np.sqrt(RR)/d, np.sign(np.cos(theta0))*((-1)**(mbar+1))*np.sqrt(eta0), lam])
-
         rs = r
-        # print('r',r.shape)
-        
-        #raised
-        # pt = 1 / (rs**2) * (-spin * (spin - lam) + (rs**2 + spin**2) * (rs**2 + spin**2 - spin * lam) / d)
-        # pr = signpr * np.sqrt(RR) / rs**2
-        # ptheta = np.sign(np.cos(theta0))*((-1)**(mbar+1))*np.sqrt(eta0) / rs**2
-        # pphi = 1/(rs**2) * (-(spin -lam) + (spin * (rs**2 + spin**2 - spin * lam)) / d)
-
-        #fluid frame momenta
-        # print('plowers',plowers.shape)
-        # print(coordtransform.shape)
-        # print(coordtransform)
-        # print(plowers[0])
-        # print(plowers.shape)
-        # print('coordtransform',coordtransform.shape)
-        # print(coordtransform.T[0])
-        # print(plowers[0])
-        # print(np.matmul(coordtransform.T[0],plowers[0]))
-        # print(coordtransform[:,:,0])
         pupperfluid = np.matmul(coordtransform, plowers)
         # print(pupperfluid.shape)
         redshift = 1 / (pupperfluid[:,0,0])
-        # plt.imshow(redshift.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('g')
-        # plt.show()
-        # print('redshift',redshift.shape)
-        # print(pupperfluid[1:])
-        # print(pupperfluid.shape)
-        # plt.imshow(pupperfluid[:,0,0].reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('kerr kFthat')
-        # plt.show()
-        # plt.imshow(pupperfluid[:,3,0].reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('kerr kFzhat')
-        # plt.show()
         lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
-        # plt.imshow(lp.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('lp')
-        # plt.show()
-        # print('lp',lp.shape)
         #fluid frame polarization
-        # print(pupperfluid[1:])
-        # print(bvec)
         pspatialfluid = pupperfluid[:,1:]
-        # print(pspatialfluid.shape)
-        # print(pspatialfluid)
         fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
-        # print(fupperfluid.shape)
         fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
-        # print(fupperfluid.shape)
         fupperfluid = np.swapaxes(fupperfluid, 1,2)
-        # print(fupperfluid.shape)
-        # print(coordtransforminv.shape)
         #apply the tetrad to get kerr f
         kfuppers = np.matmul(coordtransforminv, fupperfluid)
-        # print("Just computed kfuppers")
-        # print(kfuppers.shape)
         kft = kfuppers[:,0,0]
         kfr = kfuppers[:,1,0]
         kftheta = kfuppers[:,2,0]
         kfphi = kfuppers[:, 3,0]
-        # print(kft.shape)
-        # print(kfr.shape)
-        # print(kftheta.shape)
-        # print(kfphi.shape)
-
+        
         spin = a
         #kappa1 and kappa2
         AA = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
@@ -371,55 +248,14 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
 
         ealpha = (beta * kappa2 - nu * kappa1) / (nu**2 + beta**2)
         ebeta = (beta * kappa1 + nu * kappa2) / (nu**2 + beta**2)
-        # plt.imshow(ealpha.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('ealpha')
-        # plt.show()
-        # plt.imshow(ebeta.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('ebeta')
-        # plt.show()
-        # intensity = (ealpha**2 + ebeta**2) * lp
-        # angle = np.arctan2(ebeta, ealpha)
-        # qvec = intensity*np.cos(2*angle)
-        # uvec = intensity*np.sin(2*angle)
-        # ivec = intensity
 
         qvec = -(ealpha**2 - ebeta**2) * lp
         uvec = -2*ealpha*ebeta * lp
         ivec = np.sqrt(qvec**2+uvec**2)
-        
-        # plt.imshow(qvec.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('q')
-        # plt.show()
-        # plt.imshow(uvec.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('u')
-        # plt.show()
-        # plt.imshow(ivec.reshape((100,100)))
-        # plt.colorbar()
-        # plt.title('i')
-        # plt.show()
         qvecs.append(np.real(np.nan_to_num(qvec)))
         uvecs.append(np.real(np.nan_to_num(uvec)))
         ivecs.append(np.real(np.nan_to_num(ivec)))
         redshifts.append(np.real(np.nan_to_num(redshift)))
-
-        # if ebeta == 0 and not use2:
-        #     angle = np.pi/2
-
-        # else:
-        #     angle = np.arctan2(ebeta, ealpha) if use2==True else -np.arctan(ealpha / ebeta)
-
-        #normbad = ealpha**2+ebeta**2
-        # ealpha *= redshift**2*np.sqrt(np.abs(lp))
-        # ebeta *= redshift**2*np.sqrt(np.abs(lp))
-
-        # ealpha *= np.sqrt(intensity / normbad)
-        # ebeta *= np.sqrt(intensity / normbad)
-        # return ealpha, ebeta
-        # return [intensity, angle] if normalret == True else [ealpha, ebeta]
 
 
 

@@ -427,8 +427,13 @@ class KerrBam:
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
         return sampler
 
-    def run_nested(self, maxiter=None, maxcall=None, dlogz=None, logl_max=np.inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True):
-        self.recent_sampler.run_nested(maxiter=maxiter,maxcall=maxcall,dlogz=dlogz,logl_max=logl_max, n_effective=n_effective,add_live=add_live, print_progress=print_progress, print_func=None, save_bounds=True)
+    def run_nested(self, maxiter=None, maxcall=None, dlogz=None, logl_max=np.inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True, maxbatch=None):
+        if self.dynamic:
+            n_effective = np.inf if n_effective is None else n_effective
+            dlogz = 0.01 if dlogz is None else dlogz
+            self.recent_sampler.run_nested(maxiter_init=maxiter,maxcall_init=maxcall,dlogz_init=dlogz,logl_max_init=logl_max, n_effective_init=n_effective, print_progress=print_progress, print_func=None, save_bounds=True, maxbatch=maxbatch)
+        else:
+            self.recent_sampler.run_nested(maxiter=maxiter,maxcall=maxcall,dlogz=dlogz,logl_max=logl_max, n_effective=n_effective,add_live=add_live, print_progress=print_progress, print_func=None, save_bounds=True)
         self.recent_results = self.recent_sampler.results
         return self.recent_results
 

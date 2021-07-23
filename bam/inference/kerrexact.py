@@ -66,8 +66,8 @@ def get_radroots(lam, eta, a):
 def Delta(r, a):
     return r**2 - 2*r + a**2
 
-def Xi(r, a, inc):
-    return (r**2+a**2)**2 - Delta(r, a)* a**2 * np.sin(inc)**2
+def Xi(r, a, theta):
+    return (r**2+a**2)**2 - Delta(r, a)* a**2 * np.sin(theta)**2
 
 def omega(r, a, inc):
     return 2*a*r/Xi(r, a, inc)
@@ -195,7 +195,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
         rvecs.append(np.nan_to_num(r))
         bigR = R(r, a, lam, eta)
         bigDelta = Delta(r, a)
-        bigXi = Xi(r, a, inc)
+        bigXi = Xi(r, a, np.pi/2)
         littleomega = omega(r, a, inc)
 
         #lowered

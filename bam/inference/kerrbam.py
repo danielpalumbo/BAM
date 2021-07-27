@@ -371,7 +371,7 @@ class KerrBam:
                 cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
                 ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
                 out += ln_norm
-            return out/2
+            return out
         print("Built combined likelihood function!")
         return loglike
 

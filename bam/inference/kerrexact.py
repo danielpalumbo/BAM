@@ -90,6 +90,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
 
     zeros = np.zeros_like(rho)
     npix = len(zeros)
+    xdim = int(np.sqrt(npix))
     rp = 1+np.sqrt(1-a**2)
     alpha = rho*np.cos(varphi)
     beta = rho*np.sin(varphi)
@@ -171,7 +172,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
             Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(ef(np.pi/2, up/um)) - np.sign(beta)*Fobs))
         signpr[~crit_mask] = np.sign(Ir_turn-Ir)[~crit_mask]
         signptheta = (-1)**m * np.sign(beta)
-
         ffac = 1 / 2 * (r31 * r42)**(1/2)
         if interp:
             snnum = np.complex128(np.ones_like(rho))

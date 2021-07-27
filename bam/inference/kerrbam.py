@@ -146,7 +146,7 @@ class KerrBam:
                 print("Fixed Bam: precomputing all subimages.")
                 self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
                 # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
-            else:
+            elif self.exacttype =='interp':
                 print("Can't precompute subimages without all interpolators!")
         self.modelim = None
         if self.exacttype=='interp':

@@ -139,14 +139,14 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
     I3r_angle = np.arccos((Agl*(rp-np.real(r1)[crit_mask])-Bgl*(rp-np.real(r2)[crit_mask]))/(Agl*(rp-np.real(r1)[crit_mask])+Bgl*(rp-np.real(r2)[crit_mask])))
     
     if interp:
-        I3r = fobs_outer_int(I3r_angle, k3)
+        I3r = fobs_outer_int(I3r_angle, k3) / np.sqrt(Agl*Bgl)
     else:
-        I3r = np.real(ef(I3r_angle, k3))
+        I3r = np.real(ef(I3r_angle, k3)) / np.sqrt(Agl*Bgl)
     #even though we are inside the critical curve, we will use the outer fobs interpolator since the args are real
     if interp:
-        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*fobs_outer_int(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
+        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*fobs_outer_int(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)-I3r
     else:
-        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*ef(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
+        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*ef(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3) -I3r
 
     Ir_total[eta<0] = np.nan
     

@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import RectBivariateSpline, interp1d, interp2d
 import scipy.interpolate as si
 
+
 #define elliptic functions (need the mpmath version to take complex args)
 jacobi_ellip = np.frompyfunc(mp.ellipfun, 3, 1)
 ef_base = np.frompyfunc(mp.ellipf, 2, 1)
@@ -127,8 +128,14 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
     else:
         fobs = np.complex128(ef(np.arcsin(np.sqrt(r31/r41)), k))
         Fobs = np.complex128(ef(np.arcsin(np.cos(inc)/np.sqrt(up)), up/um))
-
-
+    # plt.imshow(np.real(fobs).reshape((xdim,xdim)))
+    # plt.colorbar()
+    # plt.title('real(fobs)')
+    # plt.show()
+    # plt.imshow(np.imag(fobs).reshape((xdim,xdim)))
+    # plt.colorbar()
+    # plt.title('imag(fobs)')
+    # plt.show()
     Ir_turn = np.real(2/np.sqrt(r31*r42)*fobs)
     
     Ir_total = 2*Ir_turn
@@ -142,13 +149,40 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
         I3r = fobs_outer_int(I3r_angle, k3) / np.sqrt(Agl*Bgl)
     else:
         I3r = np.real(ef(I3r_angle, k3)) / np.sqrt(Agl*Bgl)
+    test = np.zeros_like(rho)
+    test[crit_mask] = I3r
+    test[eta<0] = np.nan
+    plt.imshow(test.reshape((xdim,xdim)))
+    plt.colorbar()
+    plt.title('I3r')
+    plt.show()
     #even though we are inside the critical curve, we will use the outer fobs interpolator since the args are real
+    Ir_angle = np.arccos((Agl-Bgl)/(Agl+Bgl))
+    test[crit_mask] = Ir_angle
+    plt.imshow(test.reshape((xdim,xdim)))
+    plt.colorbar()
+    plt.title("Ir_angle")
+    plt.show()
     if interp:
-        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*fobs_outer_int(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)-I3r
+        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*fobs_outer_int(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
     else:
-        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*ef(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3) -I3r
-
+        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*ef(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
     Ir_total[eta<0] = np.nan
+    plt.imshow(Ir_total.reshape((xdim,xdim)))
+    plt.colorbar()
+    plt.title('Ir_total before correction')
+    plt.show()
+    Ir_total[crit_mask] -= I3r
+    plt.imshow(Ir_total.reshape((xdim,xdim)))
+    plt.colorbar()
+    plt.title('Ir_total after correction')
+    plt.show()
+
+
+    plt.imshow(Ir_total.reshape((xdim,xdim)))
+    plt.colorbar()
+    plt.title('Ir_total')
+    plt.show()
     
     signpr = np.ones_like(Ir_turn)
 
@@ -170,6 +204,10 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
             Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(K_int(urat)) - np.sign(beta)*Fobs))
         else:
             Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(ef(np.pi/2, up/um)) - np.sign(beta)*Fobs))
+        plt.imshow(Ir.reshape((xdim,xdim)))
+        plt.colorbar()
+        plt.title('Ir')
+        plt.show()
         signpr[~crit_mask] = np.sign(Ir_turn-Ir)[~crit_mask]
         signptheta = (-1)**m * np.sign(beta)
         ffac = 1 / 2 * (r31 * r42)**(1/2)
@@ -177,7 +215,12 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
             snnum = np.complex128(np.ones_like(rho))
             snnum[~crit_mask] = np.complex128(sn_outer_int((ffac*Ir-fobs)[~crit_mask], k[~crit_mask]))
             A = 1/2*np.sqrt(np.abs(r31*r42))*Ir
-            
+            test = np.copy(A)
+            test[eta<0] = np.nan
+            plt.imshow(test.reshape((xdim,xdim)))
+            plt.colorbar()
+            plt.title('A param')
+            plt.show()
             sn_xk = sn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*sn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])
             cndn_xk = cndn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*cndn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])    
 
@@ -188,10 +231,24 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
         else:
             snnum = np.complex128(sn(ffac*Ir-fobs,k))
         snsqr = snnum**2
+        snsqr[eta<0] = np.nan
+        snsqr[np.abs(snsqr)>1.1]=np.nan
+        plt.imshow(np.real(snsqr).reshape((xdim,xdim)))
+        plt.colorbar()
+        plt.title('real(snsqr)')
+        plt.show()
+        plt.imshow(np.imag(snsqr).reshape((xdim,xdim)))
+        plt.colorbar()
+        plt.title('imag(snsqr)')
+        plt.show()
         
         r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
         r[eta<0] =np.nan
         r[Ir>Ir_total] = np.nan
+        plt.imshow(r.reshape((xdim,xdim)))
+        plt.colorbar()
+        plt.title('r')
+        plt.show()
         rvecs.append(np.nan_to_num(r))
         bigR = R(r, a, lam, eta)
         bigDelta = Delta(r, a)
@@ -281,6 +338,7 @@ def build_K_interpolator(urat):
 def build_fobs_outer_interpolator(fobs_angle, k):
     ff, kk = np.meshgrid(fobs_angle, k)
     fobs = np.real(ef(ff, kk))
+    fobs[fobs==np.inf] = np.max(fobs[fobs!=np.inf])
     fobs_int_base = interp2d(fobs_angle, k, fobs)#, bounds_error=False, fill_value=0)
     fobs_int = lambda x, y: si.dfitpack.bispeu(fobs_int_base.tck[0], fobs_int_base.tck[1], fobs_int_base.tck[2], fobs_int_base.tck[3], fobs_int_base.tck[4], x, y)[0]
     return fobs_int
@@ -357,7 +415,7 @@ def build_all_interpolators(ngrid=50):
     """
 
     k = np.linspace(0,1,ngrid)
-    fobs_angle = np.linspace(0, np.pi/2,ngrid)
+    fobs_angle = np.linspace(0, 3*np.pi/4,ngrid)
     print("Building fobs outer interpolator...")
     fobs_outer_int = build_fobs_outer_interpolator(fobs_angle, k)
     
@@ -378,7 +436,7 @@ def build_all_interpolators(ngrid=50):
     ffacIr_fobs_diff = np.linspace(-5,10,ngrid)
     sn_outer_int = build_sn_outer_interpolator(ffacIr_fobs_diff, k)
     print("Building sn inner interpolators...")
-    A = np.linspace(0,3,ngrid)
+    A = np.linspace(0,10,ngrid)
     sn_inner_ints = build_sn_inner_interpolators(A, r31_phase, delta321_phase)
     # print("Built sn inner interpolators.")
     return K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints

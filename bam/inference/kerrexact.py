@@ -4,24 +4,8 @@ Implementation of the Kerr toy model for use in interpolative BAM.
 
 
 import numpy as np
-import mpmath as mp
 import matplotlib.pyplot as plt
-from scipy.interpolate import RectBivariateSpline, interp1d, interp2d
-import scipy.interpolate as si
-
-
-#define elliptic functions (need the mpmath version to take complex args)
-jacobi_ellip = np.frompyfunc(mp.ellipfun, 3, 1)
-ef_base = np.frompyfunc(mp.ellipf, 2, 1)
-def ef(u, k):
-    return np.complex128(ef_base(u, k))
-def sn(u, k):
-    return np.complex128(jacobi_ellip('sn',u,k))
-def cn(u, k):
-    return np.complex128(jacobi_ellip('cn',u,k))
-def dn(u, k):
-    return np.complex128(jacobi_ellip('dn',u,k))
-
+from scipy.special import ellipj, ellipk, ellipkinc
 
 minkmetric = np.diag([-1, 1, 1, 1])
 
@@ -80,14 +64,10 @@ def R(r, a, lam, eta):
     return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (eta + (a-lam)**2)
 
 
-def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp = True, interps = None):
+def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
-    if interp:
-        K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints = interps
-        fobs_inner_int_real, fobs_inner_int_imag = fobs_inner_ints
-        sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag = sn_inner_ints
 
     zeros = np.zeros_like(rho)
     npix = len(zeros)
@@ -96,17 +76,17 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
     alpha = rho*np.cos(varphi)
     beta = rho*np.sin(varphi)
     lam, eta = get_lam_eta(alpha,beta, inc, a)
-    lam = np.complex128(lam)
-    eta = np.complex128(eta)
     up, um = get_up_um(lam, eta, a)
-    urat = np.clip(np.real(up/um),-1, 1)
-    r1, r2, r3, r4 = get_radroots(lam, eta, a)
+    urat = up/um
+    r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
     crit_mask = np.abs(np.imag(r3))>1e-14
+    cr1 = np.real(r1)[crit_mask]
+    cr2 = np.real(r2)[crit_mask]
     r31 = r3-r1
     r32 = r3-r2
     r42 = r4-r2
     r41 = r4-r1
-    k = r32*r41 / (r31*r42)
+    k = np.real(r32*r41 / (r31*r42))[~crit_mask]
 
     if fluid_eta is None:
         fluid_eta = chi+np.pi
@@ -116,75 +96,28 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
     bphi = beq*np.sin(fluid_eta)
     
     bvec = np.array([br, bphi, bz])
+    Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
+    Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
+    fobs = ellipkinc(np.real(np.arcsin(np.sqrt(r31/r41)[~crit_mask])), k)
+    #note: only outside the critical curve, since nothing inside has a turning point
+    Ir_turn = np.real(2/np.sqrt(r31*r42)[~crit_mask]*fobs)
 
-    if interp:
-
-        r31_phase = np.angle(r31)
-        delta321_phase = np.angle(r32) - np.angle(r31)
-        Fobs = np.complex128(Fobs_int(np.arcsin(np.cos(inc)/np.sqrt(up)), urat))
-        fobs = np.complex128(np.ones_like(rho))
-        fobs[~crit_mask] = np.complex128(fobs_outer_int(np.real(np.arcsin(np.sqrt(r31/r41)[~crit_mask])), np.real(k[~crit_mask])))
-        fobs[crit_mask] = fobs_inner_int_real(r31_phase[crit_mask], delta321_phase[crit_mask]) + 1j*fobs_inner_int_imag(r31_phase[crit_mask], delta321_phase[crit_mask])
-    else:
-        fobs = np.complex128(ef(np.arcsin(np.sqrt(r31/r41)), k))
-        Fobs = np.complex128(ef(np.arcsin(np.cos(inc)/np.sqrt(up)), up/um))
-    # plt.imshow(np.real(fobs).reshape((xdim,xdim)))
-    # plt.colorbar()
-    # plt.title('real(fobs)')
-    # plt.show()
-    # plt.imshow(np.imag(fobs).reshape((xdim,xdim)))
-    # plt.colorbar()
-    # plt.title('imag(fobs)')
-    # plt.show()
-    Ir_turn = np.real(2/np.sqrt(r31*r42)*fobs)
-    
-    Ir_total = 2*Ir_turn
+    Ir_total = np.ones_like(rho)    
+    Ir_total[~crit_mask] = 2*Ir_turn
 
     Agl = np.real(np.sqrt(r32*r42)[crit_mask])
     Bgl = np.real(np.sqrt(r31*r41)[crit_mask])
-    k3 = ((Agl+Bgl)**2 - np.real(r2-r1)[crit_mask]**2)/(4*Agl*Bgl)
-    I3r_angle = np.arccos((Agl*(rp-np.real(r1)[crit_mask])-Bgl*(rp-np.real(r2)[crit_mask]))/(Agl*(rp-np.real(r1)[crit_mask])+Bgl*(rp-np.real(r2)[crit_mask])))
-    
-    if interp:
-        I3r = fobs_outer_int(I3r_angle, k3) / np.sqrt(Agl*Bgl)
-    else:
-        I3r = np.real(ef(I3r_angle, k3)) / np.sqrt(Agl*Bgl)
-    test = np.zeros_like(rho)
-    test[crit_mask] = I3r
-    test[eta<0] = np.nan
-    plt.imshow(test.reshape((xdim,xdim)))
-    plt.colorbar()
-    plt.title('I3r')
-    plt.show()
-    #even though we are inside the critical curve, we will use the outer fobs interpolator since the args are real
-    Ir_angle = np.arccos((Agl-Bgl)/(Agl+Bgl))
-    test[crit_mask] = Ir_angle
-    plt.imshow(test.reshape((xdim,xdim)))
-    plt.colorbar()
-    plt.title("Ir_angle")
-    plt.show()
-    if interp:
-        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*fobs_outer_int(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
-    else:
-        Ir_total[crit_mask] = 1/np.sqrt(Agl*Bgl)*ef(np.arccos((Agl-Bgl)/(Agl+Bgl)), k3)
+    k3 = ((Agl+Bgl)**2 - (cr2-cr1)**2)/(4*Agl*Bgl)
+    I3r_angle = np.arccos((Agl-Bgl)/(Agl+Bgl))
+    I3r = ellipkinc(I3r_angle, k3) / np.sqrt(Agl*Bgl)
+
+    I3rp_angle = np.arccos((Agl*(rp-np.real(r1)[crit_mask])-Bgl*(rp-np.real(r2)[crit_mask]))/(Agl*(rp-np.real(r1)[crit_mask])+Bgl*(rp-np.real(r2)[crit_mask])))
+    I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
+
+    Ir_total[crit_mask] = I3r - I3rp
     Ir_total[eta<0] = np.nan
-    plt.imshow(Ir_total.reshape((xdim,xdim)))
-    plt.colorbar()
-    plt.title('Ir_total before correction')
-    plt.show()
-    Ir_total[crit_mask] -= I3r
-    plt.imshow(Ir_total.reshape((xdim,xdim)))
-    plt.colorbar()
-    plt.title('Ir_total after correction')
-    plt.show()
 
-
-    plt.imshow(Ir_total.reshape((xdim,xdim)))
-    plt.colorbar()
-    plt.title('Ir_total')
-    plt.show()
-    
-    signpr = np.ones_like(Ir_turn)
+    signpr = np.ones_like(rho)
 
 
     #everything before here is n-independent
@@ -200,55 +133,23 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz, interp
     eta=np.real(eta)
     for n in range(nmax+1):
         m += 1
-        if interp:
-            Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(K_int(urat)) - np.sign(beta)*Fobs))
-        else:
-            Ir = np.real(1/np.sqrt(-um*a**2)*(2*m*np.complex128(ef(np.pi/2, up/um)) - np.sign(beta)*Fobs))
-        plt.imshow(Ir.reshape((xdim,xdim)))
-        plt.colorbar()
-        plt.title('Ir')
-        plt.show()
-        signpr[~crit_mask] = np.sign(Ir_turn-Ir)[~crit_mask]
+        Ir = 1/np.sqrt(-um*a**2)*(2*m*ellipk(urat) - np.sign(beta)*Fobs)
+        signpr[~crit_mask] = np.sign(Ir_turn-Ir[~crit_mask])
+        X3 = np.sqrt(Agl*Bgl)*(Ir[crit_mask] - signpr[crit_mask] * I3r)
+        cnnum = ellipj(X3, k3)[1]
         signptheta = (-1)**m * np.sign(beta)
-        ffac = 1 / 2 * (r31 * r42)**(1/2)
-        if interp:
-            snnum = np.complex128(np.ones_like(rho))
-            snnum[~crit_mask] = np.complex128(sn_outer_int((ffac*Ir-fobs)[~crit_mask], k[~crit_mask]))
-            A = 1/2*np.sqrt(np.abs(r31*r42))*Ir
-            test = np.copy(A)
-            test[eta<0] = np.nan
-            plt.imshow(test.reshape((xdim,xdim)))
-            plt.colorbar()
-            plt.title('A param')
-            plt.show()
-            sn_xk = sn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*sn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])
-            cndn_xk = cndn_xk_int_real(A[crit_mask],delta321_phase[crit_mask])+1j*cndn_xk_int_imag(A[crit_mask],delta321_phase[crit_mask])    
-
-            sn_yk = sn_yk_int_real(r31_phase[crit_mask],delta321_phase[crit_mask])+1j*sn_yk_int_imag(r31_phase[crit_mask],delta321_phase[crit_mask])
-            cndn_yk = cndn_yk_int_real(r31_phase[crit_mask],delta321_phase[crit_mask])+1j*cndn_yk_int_imag(r31_phase[crit_mask],delta321_phase[crit_mask])
-            
-            snnum[crit_mask] = (sn_xk*cndn_yk+sn_yk*cndn_xk)/(1-k[crit_mask]*(sn_xk*sn_yk)**2)
-        else:
-            snnum = np.complex128(sn(ffac*Ir-fobs,k))
+        ffac = 1 / 2 * np.real(r31 * r42)**(1/2)
+        snnum = np.ones_like(rho)
+        snnum[~crit_mask] = ellipj(((ffac*Ir)[~crit_mask]-fobs), k)[0]
         snsqr = snnum**2
         snsqr[eta<0] = np.nan
         snsqr[np.abs(snsqr)>1.1]=np.nan
-        plt.imshow(np.real(snsqr).reshape((xdim,xdim)))
-        plt.colorbar()
-        plt.title('real(snsqr)')
-        plt.show()
-        plt.imshow(np.imag(snsqr).reshape((xdim,xdim)))
-        plt.colorbar()
-        plt.title('imag(snsqr)')
-        plt.show()
         
         r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
+        
+        r[crit_mask] = ((Bgl*cr2 - Agl*cr1) + (Bgl*cr2+Agl*cr1)*cnnum) / ((Bgl-Agl)+(Bgl+Agl)*cnnum)
         r[eta<0] =np.nan
         r[Ir>Ir_total] = np.nan
-        plt.imshow(r.reshape((xdim,xdim)))
-        plt.colorbar()
-        plt.title('r')
-        plt.show()
         rvecs.append(np.nan_to_num(r))
         bigR = R(r, a, lam, eta)
         bigDelta = Delta(r, a)

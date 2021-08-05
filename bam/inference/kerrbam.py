@@ -10,7 +10,7 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
-from bam.inference.kerrexact import kerr_exact, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
+from bam.inference.kerrexact import kerr_exact#, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 
@@ -52,18 +52,18 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, thetabz=np.pi/2, spec=1., f=0., e=0., exacttype='interp', K_int = None, Fobs_int = None, fobs_outer_int = None, fobs_inner_ints = None, sn_outer_int = None, sn_inner_ints = None, Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, thetabz=np.pi/2, spec=1., f=0., e=0., Mscale = 2.e30*1.e9, polflux=True, source='', periodic=False):
         self.periodic=periodic
         self.dynamic=False
         self.source = source
         self.polflux = polflux
-        self.exacttype = exacttype
-        self.K_int = K_int
-        self.Fobs_int = Fobs_int
-        self.fobs_outer_int = fobs_outer_int
-        self.fobs_inner_ints = fobs_inner_ints
-        self.sn_outer_int = sn_outer_int
-        self.sn_inner_ints = sn_inner_ints
+        # self.exacttype = exacttype
+        # self.K_int = K_int
+        # self.Fobs_int = Fobs_int
+        # self.fobs_outer_int = fobs_outer_int
+        # self.fobs_inner_ints = fobs_inner_ints
+        # self.sn_outer_int = sn_outer_int
+        # self.sn_inner_ints = sn_inner_ints
         self.fov = fov
         self.npix = npix
         self.recent_sampler = None
@@ -113,8 +113,8 @@ class KerrBam:
             mode = 'fixed' 
         self.mode = mode
 
-        self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
-        self.all_interp_names = ['K','Fobs','fobs_outer','fobs_inner','sn_outer','sn_inner']
+        # self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
+        # self.all_interp_names = ['K','Fobs','fobs_outer','fobs_inner','sn_outer','sn_inner']
         self.all_params = [M, D, a, inc, zbl, PA, beta, chi,eta, thetabz, spec, f, e]+jargs
         self.all_names = ['M','D','a', 'inc','zbl','PA','beta','chi','eta','thetabz','spec','f','e']+jarg_names
         self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
@@ -142,63 +142,63 @@ class KerrBam:
         if self.mode == 'fixed':
             self.imparams = [self.M, self.D, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.thetabz, self.spec, self.jargs]
             self.rhovec = D/(M*Mscale*Gpercsq*self.MUDISTS)
-            if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
-                print("Fixed Bam: precomputing all subimages.")
-                self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
+            # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
+            print("Fixed Bam: precomputing all subimages.")
+            self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
                 # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
-            elif self.exacttype =='interp':
-                print("Can't precompute subimages without all interpolators!")
+            # elif self.exacttype =='interp':
+            #     print("Can't precompute subimages without all interpolators!")
         self.modelim = None
-        if self.exacttype=='interp':
-            for i in range(len(self.all_interp_names)):
-                if self.all_interps[i] is None:
-                    print(self.all_interp_names[i]+' does not have a specified interpolator!')
+        # if self.exacttype=='interp':
+        #     for i in range(len(self.all_interp_names)):
+        #         if self.all_interps[i] is None:
+        #             print(self.all_interp_names[i]+' does not have a specified interpolator!')
             
-        print("Finished building KerrBam! in "+ self.mode +" mode with exacttype " +self.exacttype)
+        print("Finished building KerrBam! in "+ self.mode +" mode!")#" with exacttype " +self.exacttype)
 
-    def guess_new_interpolators(self, ngrid=50):
-        """
-        Given known model parameters or prior ranges,
-        specify a reasonable range of rho values and compute
-        new interpolators.
-        """
-        print("Building all new interpolators from reasonable numbers (PLACEHOLDER FUNCTIONALITY)")
-        K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints = build_all_interpolators(ngrid=ngrid)
-        self.K_int = K_int
-        self.Fobs_int = Fobs_int
-        self.fobs_outer_int = fobs_outer_int
-        self.fobs_inner_ints = fobs_inner_ints
-        self.sn_outer_int = sn_outer_int
-        self.sn_inner_ints = sn_inner_ints
-        self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
-        print("Finished building all interpolators.")
+    # def guess_new_interpolators(self, ngrid=50):
+    #     """
+    #     Given known model parameters or prior ranges,
+    #     specify a reasonable range of rho values and compute
+    #     new interpolators.
+    #     """
+    #     print("Building all new interpolators from reasonable numbers (PLACEHOLDER FUNCTIONALITY)")
+    #     K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints = build_all_interpolators(ngrid=ngrid)
+    #     self.K_int = K_int
+    #     self.Fobs_int = Fobs_int
+    #     self.fobs_outer_int = fobs_outer_int
+    #     self.fobs_inner_ints = fobs_inner_ints
+    #     self.sn_outer_int = sn_outer_int
+    #     self.sn_inner_ints = sn_inner_ints
+    #     self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
+    #     print("Finished building all interpolators.")
                             
-    def save_interpolators(self, outname=''):
-        for i in range(len(self.all_interp_names)):
-            with open(outname+self.all_interp_names[i]+'.pkl','wb') as myfile:
-                pkl.dump(self.all_interps[i], myfile)
-            # if type(self.all_interps[i]) is list:
-            #     for j in range(len(self.all_interps[i])):
-            #         with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','wb') as myfile:
-            #             pkl.dump(self.all_interps[i][j], myfile)
-            # else:
-            #     with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
-            #         pkl.dump(self.all_interps[i], myfile)
+    # def save_interpolators(self, outname=''):
+    #     for i in range(len(self.all_interp_names)):
+    #         with open(outname+self.all_interp_names[i]+'.pkl','wb') as myfile:
+    #             pkl.dump(self.all_interps[i], myfile)
+    #         # if type(self.all_interps[i]) is list:
+    #         #     for j in range(len(self.all_interps[i])):
+    #         #         with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','wb') as myfile:
+    #         #             pkl.dump(self.all_interps[i][j], myfile)
+    #         # else:
+    #         #     with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
+    #         #         pkl.dump(self.all_interps[i], myfile)
 
-    def load_interpolators(self, outname=''):
-        for i in range(len(self.all_interp_names)):
-            with open(outname+self.all_interp_names[i]+'.pkl','rb') as myfile:
-                self.all_interps[i] = pkl.load(myfile)
-        self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints = self.all_interps
-            # if 'inner' in all_interp_names[i]:
-            #     self.all_interps[i] = []
-            #     if 'fobs' in all_interp_names[i]:
-            #         for j in range(2):
-            #             with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','rb') as myfile:
-            #                 self.all_interps[i].append(pkl.load(myfile))
-            # else:
-            #     with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
-            #         pkl.dump(self.all_interps[i], myfile)
+    # def load_interpolators(self, outname=''):
+    #     for i in range(len(self.all_interp_names)):
+    #         with open(outname+self.all_interp_names[i]+'.pkl','rb') as myfile:
+    #             self.all_interps[i] = pkl.load(myfile)
+    #     self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints = self.all_interps
+    #         # if 'inner' in all_interp_names[i]:
+    #         #     self.all_interps[i] = []
+    #         #     if 'fobs' in all_interp_names[i]:
+    #         #         for j in range(2):
+    #         #             with open(outname+all_interp_names[i]+'_'+str(j)+'.pkl','rb') as myfile:
+    #         #                 self.all_interps[i].append(pkl.load(myfile))
+    #         # else:
+    #         #     with open(outname+all_interp_names[i]+'.pkl','wb') as myfile:
+    #         #         pkl.dump(self.all_interps[i], myfile)
 
     def test(self, i, out):
         plt.close('all')
@@ -220,11 +220,11 @@ class KerrBam:
         
         #convert mudists to gravitational units
         rhovec = D / (M*self.Mscale*Gpercsq) * self.MUDISTS
-        
-        if self.exacttype == 'interp':
-            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz, interp=True, interps = [self.K_int, self.Fobs_int, self.fobs_outer_int, self.fobs_inner_ints, self.sn_outer_int, self.sn_inner_ints])
-        elif self.exacttype == 'exact':
-            rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz, interp=False)
+        rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz)        
+        # if self.exacttype == 'interp':
+            
+        # elif self.exacttype == 'exact':
+        #     rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz, interp=False)
             
         for n in range(self.nmax+1):
             profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+self.spec)
@@ -393,7 +393,8 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(res.x[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        # new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12], Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
         
@@ -490,7 +491,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(mean[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12], Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -510,7 +511,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(sample[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], thetabz=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12], Mscale = self.Mscale, polflux=self.polflux,source=self.source)
         new.modelim = new.make_image(modelim=True)
         return new
 

@@ -32,10 +32,6 @@ thetabz=np.pi/2
 
 b = KerrBam(fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=PA,  chi=chi,eta=eta, nmax=nmax, beta=beta, thetabz=thetabz, polflux=True)
 
-b.guess_new_interpolators(ngrid=50)
-b.save_interpolators()
-# b.load_interpolators()
-
 im = b.make_image()
 im.rf = obs_sa.rf
 im.display(plotp=True)#, nvec=40)
@@ -65,10 +61,6 @@ nmax_to_fit = nmax
 # M_to_fit=M
 # zbl = [0.5, 1.5]
 modelb = KerrBam(fov, npix, jfunc, jarg_names, jargs_to_fit, M_to_fit, D, a_to_fit, inc_to_fit, zbl_to_fit, PA=PA_to_fit, chi=chi_to_fit, nmax=nmax_to_fit, beta=beta_to_fit, thetabz = thetabz_to_fit)
-
-modelb.guess_new_interpolators()
-modelb.save_interpolators()
-# modelb.load_interpolators()
 
 #let's fit!
 # pool = Pool(processes=8)

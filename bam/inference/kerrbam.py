@@ -484,7 +484,7 @@ class KerrBam:
         np.savetxt(outname+'_weights.txt',weights)
 
     def pickle_result(self, outname='results'):
-        with open(outname++'.pkl','wb') as myfile:
+        with open(outname+'.pkl','wb') as myfile:
             pkl.dump(self.recent_results, myfile)
 
 

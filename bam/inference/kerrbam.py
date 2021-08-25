@@ -13,6 +13,7 @@ from scipy.optimize import dual_annealing
 from bam.inference.kerrexact import kerr_exact#, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
+# from ehtim.observing.pulses import deltaPulse2D
 
 
 def get_uniform_transform(lower, upper):
@@ -326,7 +327,7 @@ class KerrBam:
                 else:
                     to_eval.append(params[self.modeled_names.index(name)])
             #at this point, to_eval contains the full model description,
-            #so it should have 11+N parameters where N is the number of jargs
+            #so it should have 13+N parameters where N is the number of jargs
             #M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e + jargs
             #f and e are not used in image computation, so slice around them for now
             imparams = to_eval[:11] + [to_eval[13:]]
@@ -344,8 +345,6 @@ class KerrBam:
             if 'vis' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[11]*amp)**2.0+to_eval[12]**2.0)
                 model_vis = self.modelim_ivis(visuv, ttype=ttype)
-                # model_vis = self.vis(ivec, rotimxvec, rotimyvec, u, v)
-                # vislike = -1./(2.*Nvis) * np.sum(np.abs(model_vis-vis)**2 / sd**2)
                 vislike = -np.sum(np.abs(model_vis-vis)**2 / sd**2)
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
@@ -381,7 +380,7 @@ class KerrBam:
         find the MAP using scipy's dual annealing.
         """
         self.source = obs.source
-        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)
+        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ll = self.build_likelihood(obs, data_types=data_types,ttype=ttype)
         
 
@@ -421,7 +420,7 @@ class KerrBam:
 
     def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft'):#, pool=None, queue_size=None):
         self.source = obs.source
-        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)
+        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound)#, pool=pool, queue_size=queue_size)
@@ -524,9 +523,6 @@ class KerrBam:
     def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = '', modelim=False):
         if source == '':
             source = self.source
-        """
-        Returns an ehtim Image object corresponding to the Blimage n0 emission
-        """
 
         if self.mode == 'model':
             print("Cannot directly make images in model mode!")
@@ -548,7 +544,7 @@ class KerrBam:
             qvec = self.qvecs[n]
             uvec = self.uvecs[n]
 
-        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)
+        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
         im.ivec = ivec
         im.qvec = qvec
         im.uvec = uvec
@@ -556,7 +552,8 @@ class KerrBam:
         if modelim:
             im.pa = self.PA
         else:
-            im = im.rotate(self.PA)
+            # im = im.rotate(self.PA)
+            im.pa = self.PA
             mask = im.ivec<0
             im.ivec[mask]=0.
             im.qvec[mask]=0.
@@ -565,7 +562,10 @@ class KerrBam:
         # im.ivec *= self.tf / im.total_flux()
         return im
 
-
+    def make_rotated_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = ''):
+        out = self.make_image(ra=ra,dec=dec,rf=rf, mjd=mjd, n=n, source=source,modelim=False).rotate(self.PA)
+        out.pa = 0
+        return out
 
     def logcamp_chisq(self,obs):
         if self.mode != 'fixed':

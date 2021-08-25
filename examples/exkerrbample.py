@@ -34,7 +34,7 @@ b = KerrBam(fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=PA,  chi=
 
 im = b.make_image()
 im.rf = obs_sa.rf
-im.display(plotp=True)#, nvec=40)
+b.make_rotated_image().display(plotp=True)#, nvec=40)
 
 to_fit = im.observe_same(obs_sa, ampcal=False,phasecal=False)
 to_fit.plotall('u','v',conj=True)

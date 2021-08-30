@@ -9,6 +9,9 @@ from scipy.special import ellipj, ellipk, ellipkinc
 
 minkmetric = np.diag([-1, 1, 1, 1])
 
+np.seterr(invalid='ignore')
+print("KerrBAM is silencing numpy warnings about invalid inputs (default: warn, now ignore). To undo, call np.seterr(invalid='warn').")
+
 
 def get_lam_eta(alpha, beta, inc, a):
     """
@@ -76,6 +79,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     alpha = rho*np.cos(varphi)
     beta = rho*np.sin(varphi)
     lam, eta = get_lam_eta(alpha,beta, inc, a)
+    etamask = eta<0
     up, um = get_up_um(lam, eta, a)
     urat = up/um
     r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
@@ -113,9 +117,9 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
 
     I3rp_angle = np.arccos((Agl*(rp-np.real(r1)[crit_mask])-Bgl*(rp-np.real(r2)[crit_mask]))/(Agl*(rp-np.real(r1)[crit_mask])+Bgl*(rp-np.real(r2)[crit_mask])))
     I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
-
+    
     Ir_total[crit_mask] = I3r - I3rp
-    Ir_total[eta<0] = np.nan
+    Ir_total[etamask] = np.nan
 
     signpr = np.ones_like(rho)
 
@@ -142,13 +146,13 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         snnum = np.ones_like(rho)
         snnum[~crit_mask] = ellipj(((ffac*Ir)[~crit_mask]-fobs), k)[0]
         snsqr = snnum**2
-        snsqr[eta<0] = np.nan
+        snsqr[etamask] = np.nan
         snsqr[np.abs(snsqr)>1.1]=np.nan
         
         r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
         
         r[crit_mask] = ((Bgl*cr2 - Agl*cr1) + (Bgl*cr2+Agl*cr1)*cnnum) / ((Bgl-Agl)+(Bgl+Agl)*cnnum)
-        r[eta<0] =np.nan
+        r[etamask] =np.nan
         r[Ir>Ir_total] = np.nan
         rvecs.append(np.nan_to_num(r))
         bigR = R(r, a, lam, eta)

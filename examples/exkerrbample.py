@@ -68,7 +68,7 @@ dtypes = ['logcamp','cphase']
 
 #first, try to find the MAP with simulated annealing
 MAP_Bam = modelb.annealing_MAP(to_fit,data_types=dtypes)
-MAP_Bam.make_image().display()
+MAP_Bam.make_rotated_image().display()
 
 
 modelb.setup(to_fit, data_types=dtypes, nlive=250,dynamic=True)#, pool=pool, queue_size=8)
@@ -87,9 +87,9 @@ truths = [a]#[M,a] + [2]
 modelb.cornerplot(save=outname+'_corner.png', show=False,truths=truths)
 #display the Mean of Posterior
 MOP_Bam = modelb.MOP_Bam()
-MOP_Bam.make_image().display(export_pdf=outname+'_MOP.png')
+MOP_Bam.make_rotated_image().display(export_pdf=outname+'_MOP.png')
 
-randomim = modelb.random_sample_Bam().make_image()
+randomim = modelb.random_sample_Bam().make_rotated_image()
 randomim.display(export_pdf=outname+'_random.png',label_type='scale',has_cbar=False,has_title=False, show=False)
 randomim.save_fits(outname+'_random.fits')
 

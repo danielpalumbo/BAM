@@ -67,6 +67,7 @@ modelb = KerrBam(fov, npix, jfunc, jarg_names, jargs_to_fit, M_to_fit, D, a_to_f
 dtypes = ['logcamp','cphase']
 
 #first, try to find the MAP with simulated annealing
+#you can skip this if you want to get right to the posteriors
 MAP_Bam = modelb.annealing_MAP(to_fit,data_types=dtypes)
 MAP_Bam.make_rotated_image().display()
 

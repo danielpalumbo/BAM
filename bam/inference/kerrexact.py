@@ -1,5 +1,5 @@
 """
-Implementation of the Kerr toy model for use in interpolative BAM.
+Implementation of the Kerr toy model for exact computation.
 """
 
 
@@ -66,6 +66,12 @@ def Sigma(r, a, inc):
 def R(r, a, lam, eta):
     return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (eta + (a-lam)**2)
 
+def getlorentzboost(boost, chi):
+    gamma = 1 / np.sqrt(1 - boost**2) 
+    coschi = np.cos(chi)
+    sinchi = np.sin(chi)
+    lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, 0],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, 0],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, 0],[0,0,0,1]])
+    return lorentzboost
 
 def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     """
@@ -210,7 +216,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
 
         #screen appearance
         nu = -(alpha + spin * np.sin(inc))
-        # print(nu.shape)
 
         ealpha = (beta * kappa2 - nu * kappa1) / (nu**2 + beta**2)
         ebeta = (beta * kappa1 + nu * kappa2) / (nu**2 + beta**2)
@@ -228,191 +233,3 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     return rvecs, ivecs, qvecs, uvecs, redshifts
 
 
-
-def build_Fobs_interpolator(Fobs_angle, urat):
-    FF, uu = np.meshgrid(Fobs_angle, urat)
-    Fobs = np.real(ef(FF, uu))
-    Fobs_int_base = interp2d(Fobs_angle, urat, Fobs)#, bounds_error=False, fill_value=0)
-    Fobs_int = lambda x, y: si.dfitpack.bispeu(Fobs_int_base.tck[0], Fobs_int_base.tck[1], Fobs_int_base.tck[2], Fobs_int_base.tck[3], Fobs_int_base.tck[4], x, y)[0]
-    return Fobs_int
-
-def build_K_interpolator(urat):
-    K = ef(np.pi/2, urat)
-    return interp1d(urat, K)
-
-def build_fobs_outer_interpolator(fobs_angle, k):
-    ff, kk = np.meshgrid(fobs_angle, k)
-    fobs = np.real(ef(ff, kk))
-    fobs[fobs==np.inf] = np.max(fobs[fobs!=np.inf])
-    fobs_int_base = interp2d(fobs_angle, k, fobs)#, bounds_error=False, fill_value=0)
-    fobs_int = lambda x, y: si.dfitpack.bispeu(fobs_int_base.tck[0], fobs_int_base.tck[1], fobs_int_base.tck[2], fobs_int_base.tck[3], fobs_int_base.tck[4], x, y)[0]
-    return fobs_int
-
-def build_fobs_inner_interpolators(r31_phase, delta321_phase):
-    rr, dd = np.meshgrid(r31_phase, delta321_phase)
-    ff = np.arcsin(np.sqrt(np.exp(2j*rr)))
-    kk = np.exp(2j*dd)
-    fobs = ef(ff,kk)
-    fobs_real = np.real(fobs)
-    fobs_imag = np.imag(fobs)
-    fobs_int_base_real = interp2d(r31_phase, delta321_phase, fobs_real)
-    fobs_int_base_imag = interp2d(r31_phase, delta321_phase, fobs_imag)  
-    fobs_int_real = lambda x, y: si.dfitpack.bispeu(fobs_int_base_real.tck[0],fobs_int_base_real.tck[1],fobs_int_base_real.tck[2],fobs_int_base_real.tck[3],fobs_int_base_real.tck[4],x,y)[0] 
-    fobs_int_imag = lambda x, y: si.dfitpack.bispeu(fobs_int_base_imag.tck[0],fobs_int_base_imag.tck[1],fobs_int_base_imag.tck[2],fobs_int_base_imag.tck[3],fobs_int_base_imag.tck[4],x,y)[0] 
-    return [fobs_int_real, fobs_int_imag]
-
-def build_sn_outer_interpolator(ffacIr_fobs_diff, k):
-    ff, kk = np.meshgrid(ffacIr_fobs_diff, k)
-    sn_exact = np.complex128(sn(ff, kk))
-    sn_real = np.real(sn_exact)
-    # sn_imag = np.imag(sn_exact)
-    sn_int_base_real = interp2d(ffacIr_fobs_diff, k, sn_real)#, bounds_error=False, fill_value=0)
-    sn_int_real = lambda x, y: si.dfitpack.bispeu(sn_int_base_real.tck[0], sn_int_base_real.tck[1], sn_int_base_real.tck[2], sn_int_base_real.tck[3], sn_int_base_real.tck[4], x, y)[0]
-    # sn_int_base_imag = interp2d(ffacIr_fobs_diff, k, sn_imag)
-    # sn_int_imag = lambda x, y: si.dfitpack.bispeu(sn_int_base_imag.tck[0], sn_int_base_imag.tck[1], sn_int_base_imag.tck[2], sn_int_base_imag.tck[3], sn_int_base_imag.tck[4], x, y)[0]
-    return sn_int_real#, sn_int_imag
-
-def build_sn_inner_interpolators(A, r31_phase, delta321_phase):
-
-    #First, deal with functions of A and delta321_phase
-    #these are (x|k)
-    AA, dd = np.meshgrid(A, delta321_phase)
-    xx = AA * np.exp(-1j*dd / 2)
-    kk = np.exp(2j*dd)
-    sn_xk = sn(xx,kk)
-    cn_xk = cn(xx,kk)
-    dn_xk = dn(xx,kk)
-    cndn_xk = cn_xk*dn_xk
-    sn_xk_int_base_real = interp2d(A, delta321_phase, np.real(sn_xk))
-    cndn_xk_int_base_real = interp2d(A, delta321_phase, np.real(cndn_xk))
-    sn_xk_int_base_imag = interp2d(A, delta321_phase, np.imag(sn_xk))
-    cndn_xk_int_base_imag = interp2d(A, delta321_phase, np.imag(cndn_xk))
-    sn_xk_int_real = lambda x, y: si.dfitpack.bispeu(sn_xk_int_base_real.tck[0],sn_xk_int_base_real.tck[1],sn_xk_int_base_real.tck[2],sn_xk_int_base_real.tck[3],sn_xk_int_base_real.tck[4],x,y)[0]
-    cndn_xk_int_real = lambda x, y: si.dfitpack.bispeu(cndn_xk_int_base_real.tck[0],cndn_xk_int_base_real.tck[1],cndn_xk_int_base_real.tck[2],cndn_xk_int_base_real.tck[3],cndn_xk_int_base_real.tck[4],x,y)[0]
-    sn_xk_int_imag = lambda x, y: si.dfitpack.bispeu(sn_xk_int_base_imag.tck[0],sn_xk_int_base_imag.tck[1],sn_xk_int_base_imag.tck[2],sn_xk_int_base_imag.tck[3],sn_xk_int_base_imag.tck[4],x,y)[0]
-    cndn_xk_int_imag = lambda x, y: si.dfitpack.bispeu(cndn_xk_int_base_imag.tck[0],cndn_xk_int_base_imag.tck[1],cndn_xk_int_base_imag.tck[2],cndn_xk_int_base_imag.tck[3],cndn_xk_int_base_imag.tck[4],x,y)[0]
-
-    #Next, deal with functions of r31_phase and delta321_phase
-    #these are (y|k) in the notes
-    rr, dd = np.meshgrid(r31_phase, delta321_phase)
-    ff = np.arcsin(np.sqrt(np.exp(2j*rr)))
-    kk = np.exp(2j*dd)
-    fobs = ef(ff,kk)
-    yy = -fobs
-    sn_yk = sn(yy, kk)
-    cn_yk = cn(yy, kk)
-    dn_yk = dn(yy, kk)
-    cndn_yk = cn_yk*dn_yk
-    sn_yk_int_base_real = interp2d(r31_phase, delta321_phase, np.real(sn_yk))
-    cndn_yk_int_base_real = interp2d(r31_phase, delta321_phase, np.real(cndn_yk))
-    sn_yk_int_base_imag = interp2d(r31_phase, delta321_phase, np.imag(sn_yk))
-    cndn_yk_int_base_imag = interp2d(r31_phase, delta321_phase, np.imag(cndn_yk))
-    sn_yk_int_real = lambda x, y: si.dfitpack.bispeu(sn_yk_int_base_real.tck[0],sn_yk_int_base_real.tck[1],sn_yk_int_base_real.tck[2],sn_yk_int_base_real.tck[3],sn_yk_int_base_real.tck[4],x,y)[0]
-    cndn_yk_int_real = lambda x, y: si.dfitpack.bispeu(cndn_yk_int_base_real.tck[0],cndn_yk_int_base_real.tck[1],cndn_yk_int_base_real.tck[2],cndn_yk_int_base_real.tck[3],cndn_yk_int_base_real.tck[4],x,y)[0]
-    sn_yk_int_imag = lambda x, y: si.dfitpack.bispeu(sn_yk_int_base_imag.tck[0],sn_yk_int_base_imag.tck[1],sn_yk_int_base_imag.tck[2],sn_yk_int_base_imag.tck[3],sn_yk_int_base_imag.tck[4],x,y)[0]
-    cndn_yk_int_imag = lambda x, y: si.dfitpack.bispeu(cndn_yk_int_base_imag.tck[0],cndn_yk_int_base_imag.tck[1],cndn_yk_int_base_imag.tck[2],cndn_yk_int_base_imag.tck[3],cndn_yk_int_base_imag.tck[4],x,y)[0]
-
-    return [sn_xk_int_real, sn_xk_int_imag, cndn_xk_int_real, cndn_xk_int_imag, sn_yk_int_real, sn_yk_int_imag, cndn_yk_int_real, cndn_yk_int_imag]
-
-def build_all_interpolators(ngrid=50):
-    """
-    For now, a bunch of magic numbers that give decent interpolators for reasonable FOVs and resolutions.
-    """
-
-    k = np.linspace(0,1,ngrid)
-    fobs_angle = np.linspace(0, 3*np.pi/4,ngrid)
-    print("Building fobs outer interpolator...")
-    fobs_outer_int = build_fobs_outer_interpolator(fobs_angle, k)
-    
-    r31_phase = np.linspace(-np.pi,np.pi,ngrid)
-    delta321_phase = np.linspace(-np.pi,np.pi,ngrid)
-    print("Building fobs inner interpolators...")
-    fobs_inner_ints = build_fobs_inner_interpolators(r31_phase, delta321_phase)
-    
-    urat = np.linspace(-1,1,ngrid)
-    Fobs_angle = np.linspace(0, np.pi/2,ngrid)
-    print("Building Fobs interpolator...")
-
-    Fobs_int = build_Fobs_interpolator(Fobs_angle, urat)
-    
-    print("Building K interpolator...")
-    K_int = build_K_interpolator(urat)
-    print("Building sn outer interpolator...")
-    ffacIr_fobs_diff = np.linspace(-5,10,ngrid)
-    sn_outer_int = build_sn_outer_interpolator(ffacIr_fobs_diff, k)
-    print("Building sn inner interpolators...")
-    A = np.linspace(0,10,ngrid)
-    sn_inner_ints = build_sn_inner_interpolators(A, r31_phase, delta321_phase)
-    # print("Built sn inner interpolators.")
-    return K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints
-
-
-#first, make lorentz transformation matrix
-def getlorentzboost(boost, chi):
-    gamma = 1 / np.sqrt(1 - boost**2) 
-    coschi = np.cos(chi)
-    sinchi = np.sin(chi)
-    lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, 0],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, 0],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, 0],[0,0,0,1]])
-    return lorentzboost
-
-
-
-# npix = 80
-# pxi = (np.arange(npix)-0.01)/npix-0.5
-# pxj = np.arange(npix)/npix-0.5
-# # get angles measured north of west
-# PXI,PXJ = np.meshgrid(pxi,pxj)
-# varphi = np.arctan2(-PXJ,PXI)+1e-15# - np.pi/2
-# # self.varphivec = varphi.flatten()
-
-# #get grid of angular radii
-# fov = 16
-# mui = pxi*fov
-# muj = pxj*fov
-# MUI,MUJ = np.meshgrid(mui,muj)
-# rho = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
-
-
-# inc = 80/180*np.pi
-# a = 0.5
-# nmax = 2
-# rhovec = rho.flatten()
-# varphivec = varphi.flatten()
-# rs_interped = kerr_interpolative(rhovec, varphivec, inc, a, nmax, K_int, Fobs_int,fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints)[0]
-# # r[r<0] = 0
-# # r0 = rs_interped[0]
-# # r1 = rs_interped[1]
-# # r1[r1>50]=50
-# # r1[r1<0]=0
-# plt.imshow(rs_interped[0].reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
-# plt.colorbar()
-# plt.show()
-
-
-# # a = 0.99
-# # inc = 17/180*np.pi
-# # n = 0
-# r = kerr_exact(rhovec, varphivec, inc, a, nmax)
-# # r[r<0]=0
-# # r[r>2*np.max(rhovec)] = 0#2*np.max(rhovec)
-# r[r==np.max(r)] = 0
-# plt.imshow(r.reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
-# plt.colorbar()
-# plt.show()
-
-
-
-# plt.imshow(r.reshape((npix,npix))-r_interped.reshape((npix,npix)),extent=[-fov//2, fov//2, -fov//2, fov//2])
-# plt.colorbar()
-# plt.show()
-
-# compare_sn(sn_inner_ints, 0.1, 0.3, 0.4)
-
-
-
-
-# r[r<0] = 0
-# r[r>2*np.max(rho)] = 2*np.max(rho)
-# plt.imshow(r)
-# plt.colorbar()
-# plt.show()

@@ -57,11 +57,11 @@ def Delta(r, a):
 def Xi(r, a, theta):
     return (r**2+a**2)**2 - Delta(r, a)* a**2 * np.sin(theta)**2
 
-def omega(r, a, inc):
-    return 2*a*r/Xi(r, a, inc)
+def omega(r, a, theta):
+    return 2*a*r/Xi(r, a, theta)
 
-def Sigma(r, a, inc):
-    return r**2 + a**2 * np.cos(inc)**2
+def Sigma(r, a, theta):
+    return r**2 + a**2 * np.cos(theta)**2
 
 def R(r, a, lam, eta):
     return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (eta + (a-lam)**2)
@@ -164,7 +164,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         bigR = R(r, a, lam, eta)
         bigDelta = Delta(r, a)
         bigXi = Xi(r, a, np.pi/2)
-        littleomega = omega(r, a, inc)
+        littleomega = omega(r, a, np.pi/2)
 
         #lowered
         pt_low = -1*np.ones_like(r)

@@ -256,6 +256,9 @@ class KerrBam:
     def modelim_ivis(self, uv, ttype='nfft'):
         return self.modelim.sample_uv(uv,ttype=ttype)[0]
 
+    def modelim_allvis(self, uv, ttype='nfft'):
+        return self.modelim.sample_uv(uv,ttype=ttype)
+
     def modelim_logcamp(self, uv1, uv2, uv3, uv4, ttype='nfft'):
         vis12 = self.modelim_ivis(uv1,ttype=ttype)
         vis34 = self.modelim_ivis(uv2,ttype=ttype)
@@ -296,6 +299,42 @@ class KerrBam:
             visuv = np.vstack([u,v]).T
             Nvis = len(vis)
             print("Building vis likelihood!")
+        if 'qvis' in data_types:
+            qvis = obs.data['qvis']
+            qsigma = obs.data['qsigma']
+            qamp = np.abs(qvis)
+            u = obs.data['u']
+            v = obs.data['v']
+            visuv = np.vstack([u,v]).T
+            Nqvis = len(qvis)
+        if 'uvis' in data_types:
+            uvis = obs.data['uvis']
+            usigma = obs.data['usigma']
+            uamp = np.abs(uvis)
+            u = obs.data['u']
+            v = obs.data['v']
+            visuv = np.vstack([u,v]).T
+            Nuvis = len(uvis)
+        if 'vvis' in data_types:
+            vvis = obs.data['vvis']
+            vsigma = obs.data['vsigma']
+            vamp = np.abs(vvis)
+            u = obs.data['u']
+            v = obs.data['v']
+            visuv = np.vstack([u,v]).T
+            Nvvis = len(vvis)
+        if 'mvis' in data_dtypes:
+            vis = obs.data['vis']
+            qvis = obs.data['qvis']
+            uvis = obs.data['uvis']
+            pvis = qvis+1j*uvis
+            sigma = obs.data['sigma']
+            mvis = pvis/vis
+            msigma = sigma * np.sqrt(2/np.abs(vis)**2 + np.abs(pvis)**2 / np.abs(vis)**4)
+            u = obs.data['u']
+            v = obs.data['v']
+            visuv = np.vstack([u,v]).T
+            Nmvis = len(mvis)
         if 'amp' in data_types:
             sigma = obs.data['sigma']
             amp = obs.unpack('amp', debias=True)['amp']
@@ -341,12 +380,37 @@ class KerrBam:
             self.modelim.qvec = qvec
             self.modelim.uvec = uvec
             self.modelim.pa = to_eval[self.all_names.index('PA')]
+            if 'vis' in data_types or 'qvis' in data_types or 'uvis' in data_types or 'mvis' in data_types:
+                model_ivis, model_qvis, model_uvis, model_vvis = self.modelim_allvis(visuv, ttype=ttype)
+                if 'mvis' in data_types:
+                    model_mvis = (model_qvis+1j*model_uvis)/model_ivis
 
             if 'vis' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[11]*amp)**2.0+to_eval[12]**2.0)
-                model_vis = self.modelim_ivis(visuv, ttype=ttype)
-                vislike = -np.sum(np.abs(model_vis-vis)**2 / sd**2)
+                # model_vis = self.modelim_ivis(visuv, ttype=ttype)
+                vislike = -np.sum(np.abs(model_ivis-vis)**2 / sd**2)
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
+                out+=ln_norm
+            if 'qvis' in data_types:
+                sd = sqrt(qsigma**2.0 +(to_eval[11]*qamp)**2.0+to_eval[12]**2.0)
+                qvislike = -np.sum(np.abs(model_qvis-qvis)**2.0/sd**2)
+                ln_norm = qvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
+                out += ln_norm
+            if 'uvis' in data_types:
+                sd = sqrt(usigma**2.0 +(to_eval[11]*uamp)**2.0+to_eval[12]**2.0)
+                uvislike = -np.sum(np.abs(model_uvis-uvis)**2.0/sd**2)
+                ln_norm = uvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
+                out += ln_norm
+            if 'vvis' in data_types:
+                sd = sqrt(vsigma**2.0 +(to_eval[11]*vamp)**2.0+to_eval[12]**2.0)
+                vvislike = -np.sum(np.abs(model_vvis-vvis)**2.0/sd**2)
+                ln_norm = vvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
+                out += ln_norm
+            if 'mvis' in data_types:
+                sd = sqrt(sigma**2.0 + (to_eval[11]*amp)**2.0+to_eval[12]**2.0)
+                sd = vsigma*sd/sigma
+                mvislike = -np.sum(np.abs(model_mvis-mvis)**2.0/sd**2)
+                ln_norm = mvislike -2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out+=ln_norm
             if 'amp' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[11]*amp)**2.0+to_eval[12]**2.0)

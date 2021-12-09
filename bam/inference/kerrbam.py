@@ -323,7 +323,7 @@ class KerrBam:
             v = obs.data['v']
             visuv = np.vstack([u,v]).T
             Nvvis = len(vvis)
-        if 'mvis' in data_dtypes:
+        if 'mvis' in data_types:
             vis = obs.data['vis']
             qvis = obs.data['qvis']
             uvis = obs.data['uvis']

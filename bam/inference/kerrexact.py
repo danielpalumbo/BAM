@@ -11,6 +11,7 @@ minkmetric = np.diag([-1, 1, 1, 1])
 
 np.seterr(invalid='ignore')
 print("KerrBAM is silencing numpy warnings about invalid inputs (default: warn, now ignore). To undo, call np.seterr(invalid='warn').")
+realkey = lambda x: np.real(x)
 
 
 def get_lam_eta(alpha, beta, inc, a):
@@ -48,7 +49,7 @@ def get_radroots(lam, eta, a):
     r2 = -z + np.sqrt(-A/2 - z**2 + B/(4*z))
     r3 = z - np.sqrt(-A/2 - z**2 - B/(4*z))
     r4 = z + np.sqrt(-A/2 - z**2 - B/(4*z))
-    return r1,r2,r3,r4
+    return r1, r2, r3, r4
 
 
 def Delta(r, a):
@@ -86,6 +87,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     beta = rho*np.sin(varphi)
     lam, eta = get_lam_eta(alpha,beta, inc, a)
     etamask = eta<0
+    # print(etamask)
     up, um = get_up_um(lam, eta, a)
     urat = up/um
     r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
@@ -125,7 +127,10 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
     
     Ir_total[crit_mask] = I3r - I3rp
+
+    # return Ir_total
     Ir_total[etamask] = np.nan
+
 
     signpr = np.ones_like(rho)
 
@@ -192,7 +197,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
         rs = r
         pupperfluid = np.matmul(coordtransform, plowers)
-        # print(pupperfluid.shape)
+        puppertest = pupperfluid[:,3,0]
         redshift = 1 / (pupperfluid[:,0,0])
         lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
         #fluid frame polarization
@@ -206,14 +211,18 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         kfr = kfuppers[:,1,0]
         kftheta = kfuppers[:,2,0]
         kfphi = kfuppers[:, 3,0]
-        
+        # plt.imshow(kft.reshape((xdim,xdim)),cmap='afmhot')
+        # plt.colorbar()
+        # plt.show()
+
         spin = a
         #kappa1 and kappa2
         AA = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
         BB = (rs**2 + spin**2) * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
         kappa1 = rs * AA
         kappa2 = -rs * BB
-
+        # kappa1 = np.clip(np.real(kappa1), -20, 20)
+        
         #screen appearance
         nu = -(alpha + spin * np.sin(inc))
 

@@ -145,7 +145,7 @@ class KerrBam:
             self.rhovec = D/(M*Mscale*Gpercsq*self.MUDISTS)
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
             print("Fixed Bam: precomputing all subimages.")
-            self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
+            self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
                 # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
             # elif self.exacttype =='interp':
             #     print("Can't precompute subimages without all interpolators!")
@@ -221,7 +221,7 @@ class KerrBam:
         
         #convert mudists to gravitational units
         rhovec = D / (M*self.Mscale*Gpercsq) * self.MUDISTS
-        rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz)        
+        rvecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, thetabz)        
         # if self.exacttype == 'interp':
             
         # elif self.exacttype == 'exact':
@@ -233,16 +233,19 @@ class KerrBam:
                 ivecs[n]*=profile
                 qvecs[n]*=profile
                 uvecs[n]*=profile
+                vvecs[n]*=profile
             else:
                 ivecs[n] = profile
                 qvecs[n] = ivecs[n]*0
                 uvecs[n] = ivecs[n]*0
+                vvecs[n] = ivecs[n]*0
 
         tf = np.sum(ivecs)
         ivecs = [ivec*zbl/tf for ivec in ivecs]
         qvecs = [qvec*zbl/tf for qvec in qvecs]
         uvecs = [uvec*zbl/tf for uvec in uvecs]
-        return ivecs, qvecs, uvecs#, rotimxvec, rotimyvec
+        vvecs = [vvec*zbl/tf for vvec in vvecs]
+        return ivecs, qvecs, uvecs, vvecs #, rotimxvec, rotimyvec
 
 
 
@@ -370,15 +373,17 @@ class KerrBam:
             #M, D, inc, zbl, PA, beta, chi, thetabz, spec, f, e + jargs
             #f and e are not used in image computation, so slice around them for now
             imparams = to_eval[:11] + [to_eval[13:]]
-            ivecs, qvecs, uvecs = self.compute_image(imparams)#, rotimxvec, rotimyvec 
+            ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)#, rotimxvec, rotimyvec 
             out = 0.
             ivec = np.sum(ivecs,axis=0)
             qvec = np.sum(qvecs,axis=0)
             uvec = np.sum(uvecs,axis=0)
+            vvec = np.sum(vvecs,axis=0)
 
             self.modelim.ivec = ivec
             self.modelim.qvec = qvec
             self.modelim.uvec = uvec
+            self.modelim_vvec = vvec
             self.modelim.pa = to_eval[self.all_names.index('PA')]
             if 'vis' in data_types or 'qvis' in data_types or 'uvis' in data_types or 'mvis' in data_types:
                 model_ivis, model_qvis, model_uvis, model_vvis = self.modelim_allvis(visuv, ttype=ttype)
@@ -594,7 +599,7 @@ class KerrBam:
         try:
             self.ivecs
         except:
-            self.ivecs, self.qvecs, self.uvecs= self.compute_image(self.imparams)
+            self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
         
                 
         # imparams = self.all_params[:9] + [self.all_params[11:]]
@@ -603,15 +608,18 @@ class KerrBam:
             ivec = np.sum(self.ivecs,axis=0)
             qvec = np.sum(self.qvecs,axis=0)
             uvec = np.sum(self.uvecs,axis=0)
+            vvec = np.sum(self.vvecs,axis=0)
         elif type(n) is int:
             ivec = self.ivecs[n]
             qvec = self.qvecs[n]
             uvec = self.uvecs[n]
+            vvec = self.vvecs[n]
 
         im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
         im.ivec = ivec
         im.qvec = qvec
         im.uvec = uvec
+        im.vvec = vvec
 
         if modelim:
             im.pa = self.PA
@@ -622,6 +630,7 @@ class KerrBam:
             im.ivec[mask]=0.
             im.qvec[mask]=0.
             im.uvec[mask]=0.
+            im.vvec[mask]=0.
 
         # im.ivec *= self.tf / im.total_flux()
         return im

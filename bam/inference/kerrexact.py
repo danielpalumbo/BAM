@@ -143,6 +143,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     qvecs = []
     uvecs = []
     ivecs = []
+    vvecs = []
     redshifts = []
     lam=np.real(lam)
     eta=np.real(eta)
@@ -197,7 +198,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
         rs = r
         pupperfluid = np.matmul(coordtransform, plowers)
-        puppertest = pupperfluid[:,3,0]
         redshift = 1 / (pupperfluid[:,0,0])
         lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
         #fluid frame polarization
@@ -205,6 +205,13 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
         fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
         fupperfluid = np.swapaxes(fupperfluid, 1,2)
+        vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
+        # print(V)
+        # print(V.shape)
+        # plt.imshow(V.reshape((xdim,xdim)))
+        # plt.colorbar() 
+        # plt.show()
+
         #apply the tetrad to get kerr f
         kfuppers = np.matmul(coordtransforminv, fupperfluid)
         kft = kfuppers[:,0,0]
@@ -235,10 +242,11 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         qvecs.append(np.real(np.nan_to_num(qvec)))
         uvecs.append(np.real(np.nan_to_num(uvec)))
         ivecs.append(np.real(np.nan_to_num(ivec)))
+        vvecs.append(np.real(np.nan_to_num(vvec)))
         redshifts.append(np.real(np.nan_to_num(redshift)))
 
 
 
-    return rvecs, ivecs, qvecs, uvecs, redshifts
+    return rvecs, ivecs, qvecs, uvecs, vvecs, redshifts
 
 

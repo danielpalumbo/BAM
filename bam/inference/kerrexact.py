@@ -239,6 +239,11 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         qvec = -(ealpha**2 - ebeta**2) * lp
         uvec = -2*ealpha*ebeta * lp
         ivec = np.sqrt(qvec**2+uvec**2)
+        rpmask = np.abs(r-rp) < 0.01*rp
+        ivec[rpmask]=0.
+        qvec[rpmask]=0.
+        uvec[rpmask]=0.
+        vvec[rpmask]=0.
         qvecs.append(np.real(np.nan_to_num(qvec)))
         uvecs.append(np.real(np.nan_to_num(uvec)))
         ivecs.append(np.real(np.nan_to_num(ivec)))

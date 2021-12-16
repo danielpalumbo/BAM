@@ -385,7 +385,7 @@ class KerrBam:
             self.modelim.uvec = uvec
             self.modelim_vvec = vvec
             self.modelim.pa = to_eval[self.all_names.index('PA')]
-            if 'vis' in data_types or 'qvis' in data_types or 'uvis' in data_types or 'vvis in data_types' or 'mvis' in data_types:
+            if 'vis' in data_types or 'qvis' in data_types or 'uvis' in data_types or 'vvis' in data_types or 'mvis' in data_types:
                 model_ivis, model_qvis, model_uvis, model_vvis = self.modelim_allvis(visuv, ttype=ttype)
                 if 'mvis' in data_types:
                     model_mvis = (model_qvis+1j*model_uvis)/model_ivis

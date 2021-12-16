@@ -200,6 +200,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         pupperfluid = np.matmul(coordtransform, plowers)
         redshift = 1 / (pupperfluid[:,0,0])
         lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
+        
         #fluid frame polarization
         pspatialfluid = pupperfluid[:,1:]
         fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
@@ -218,10 +219,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         kfr = kfuppers[:,1,0]
         kftheta = kfuppers[:,2,0]
         kfphi = kfuppers[:, 3,0]
-        # plt.imshow(kft.reshape((xdim,xdim)),cmap='afmhot')
-        # plt.colorbar()
-        # plt.show()
-
         spin = a
         #kappa1 and kappa2
         AA = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
@@ -233,17 +230,21 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         #screen appearance
         nu = -(alpha + spin * np.sin(inc))
 
-        ealpha = (beta * kappa2 - nu * kappa1) / (nu**2 + beta**2)
-        ebeta = (beta * kappa1 + nu * kappa2) / (nu**2 + beta**2)
+        norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)
+        ealpha = (beta * kappa2 - nu * kappa1) / norm
+        ebeta = (beta * kappa1 + nu * kappa2) / norm
 
-        qvec = -(ealpha**2 - ebeta**2) * lp
-        uvec = -2*ealpha*ebeta * lp
+        qvec = -(ealpha**2 - ebeta**2)
+        uvec = -2*ealpha*ebeta
+        
+        qvec *= lp
+        uvec *= lp
         ivec = np.sqrt(qvec**2+uvec**2)
-        rpmask = np.abs(r-rp) < 0.01*rp
-        ivec[rpmask]=0.
-        qvec[rpmask]=0.
-        uvec[rpmask]=0.
-        vvec[rpmask]=0.
+        # rpmask = np.abs(r-rp) < 0.01*rp
+        # ivec[rpmask]=0.
+        # qvec[rpmask]=0.
+        # uvec[rpmask]=0.
+        # vvec[rpmask]=0.
         qvecs.append(np.real(np.nan_to_num(qvec)))
         uvecs.append(np.real(np.nan_to_num(uvec)))
         ivecs.append(np.real(np.nan_to_num(ivec)))

@@ -91,7 +91,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
     up, um = get_up_um(lam, eta, a)
     urat = up/um
     r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
-    crit_mask = np.abs(np.imag(r3))>1e-14
+    crit_mask = np.abs(np.imag(r3))>1e-10
     cr1 = np.real(r1)[crit_mask]
     cr2 = np.real(r2)[crit_mask]
     r31 = r3-r1
@@ -207,11 +207,6 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
         fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
         fupperfluid = np.swapaxes(fupperfluid, 1,2)
         vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
-        # print(V)
-        # print(V.shape)
-        # plt.imshow(V.reshape((xdim,xdim)))
-        # plt.colorbar() 
-        # plt.show()
 
         #apply the tetrad to get kerr f
         kfuppers = np.matmul(coordtransforminv, fupperfluid)

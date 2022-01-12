@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import ehtim as eh
 import matplotlib.pyplot as plt
@@ -249,12 +250,14 @@ class KerrBam:
 
 
 
-    def observe_same(self, obs):
+    def observe_same(self, obs, ampcal=True,phasecal=True,add_th_noise=True,seed=None):
+        if seed is None:
+            seed = random.randrange(sys.maxsize)
         if self.mode=='model':
             print("Can't observe_same in model mode!")
             return
         im = self.make_image(ra=obs.ra, dec=obs.dec, rf=obs.rf, mjd = obs.mjd, source=obs.source)
-        return im.observe_same(obs)
+        return im.observe_same(obs, ampcal=ampcal,phasecal=phasecal, add_th_noise=add_th_noise, seed=seed)
 
     def modelim_ivis(self, uv, ttype='nfft'):
         return self.modelim.sample_uv(uv,ttype=ttype)[0]

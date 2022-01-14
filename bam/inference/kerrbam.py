@@ -11,6 +11,7 @@ from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
 from bam.inference.kerrexact import kerr_exact#, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
+from scipy.special import ive
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # from ehtim.observing.pulses import deltaPulse2D
@@ -438,7 +439,8 @@ class KerrBam:
                 # model_cphase = self.cphase(ivec, rotimxvec, rotimyvec, cphaseu1, cphaseu2, cphaseu3, cphasev1, cphasev2, cphasev3)
                 # cphaselike = -2/Ncphase * np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
                 cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
-                ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
+                # ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
+                ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(cphase_sigma)**2))) 
                 out += ln_norm
             return out
         print("Built combined likelihood function!")

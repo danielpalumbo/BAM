@@ -4,6 +4,8 @@ from bam.inference.model_helpers import M87_dist, M87_mass
 from bam.inference.kerrbam import KerrBam
 import ehtim as eh
 
+
+#this example emissivity envelope could also have been imported with from bam.inference.jfuncs import ring_jfunc
 def example_jfunc(r, jargs):
     peak_r = jargs[0]
     thickness = jargs[1]

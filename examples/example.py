@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from bam.inference.model_helpers import M87_dist, M87_mass
 from bam.inference.kerrbam import KerrBam
 import ehtim as eh
 
@@ -19,9 +18,8 @@ fov =60*eh.RADPERUAS
 npix = 40
 jfunc = example_jfunc
 jarg_names = ['peak_r','thickness']
-D = M87_dist
 jargs = [4.5, 2.]#, np.pi/2]
-M = 6.5#M87_mass
+MoDuas = 3.8 # M over D in uas
 inc = 17/180*np.pi
 zbl = 0.6
 PA = 288/180*np.pi#270/180*np.pi# [0, 2*np.pi]
@@ -32,7 +30,7 @@ beta = 0.5
 a = -0.5
 thetabz=np.pi/2
 
-b = KerrBam(fov, npix, jfunc, jarg_names, jargs, M, D, a, inc, zbl, PA=PA,  chi=chi,eta=eta, nmax=nmax, beta=beta, thetabz=thetabz, polflux=True)
+b = KerrBam(fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=PA,  chi=chi,eta=eta, nmax=nmax, beta=beta, thetabz=thetabz, polflux=True)
 
 im = b.make_image()
 im.rf = obs_sa.rf
@@ -48,7 +46,7 @@ to_fit.data['sigma'] = (to_fit.data['sigma']**2+(sig*1e-3)**2)**0.5
 to_fit.plotall('uvdist','amp')
 
 jargs_to_fit = jargs#.5,2.5]]#jargs#[[6,10],[0.5,4]]#[0.5,6]]#,np.pi/2]
-M_to_fit = M#[6,7]
+MoDuas_to_fit = [1,5]
 a_to_fit = [-0.99, -0.01]#, 0.99]
 inc_to_fit =inc#[1*np.pi/180, 30*np.pi/180]
 beta_to_fit =beta#[0.,0.9]
@@ -62,7 +60,7 @@ nmax_to_fit = nmax
 # jargs_to_fit = jargs
 # M_to_fit=M
 # zbl = [0.5, 1.5]
-modelb = KerrBam(fov, npix, jfunc, jarg_names, jargs_to_fit, M_to_fit, D, a_to_fit, inc_to_fit, zbl_to_fit, PA=PA_to_fit, chi=chi_to_fit, nmax=nmax_to_fit, beta=beta_to_fit, thetabz = thetabz_to_fit)
+modelb = KerrBam(fov, npix, jfunc, jarg_names, jargs_to_fit, MoDuas_to_fit, a_to_fit, inc_to_fit, zbl_to_fit, PA=PA_to_fit, chi=chi_to_fit, nmax=nmax_to_fit, beta=beta_to_fit, thetabz = thetabz_to_fit)
 
 #let's fit!
 # pool = Pool(processes=8)

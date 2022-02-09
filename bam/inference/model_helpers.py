@@ -4,11 +4,13 @@ from collections.abc import Iterable
 Gpercsq = 6.67e-11 / (3e8)**2
 M87_ra = 12.513728717168174
 M87_dec = 12.39112323919932
-M87_dist = 16.9 * 3.086e22
-M87_mass = 6.2e9 * 2e30
+M87_dist = 16.8 * 3.086e22
+M87_mass = 6.5e9 * 2e30
 M87_inc = 17*np.pi/180
 M87_PA = (288-360)*np.pi/180
-
+M87_MoD = Gpercsq*M87_mass / M87_dist
+RADPERUAS = np.pi/180/60/60/1e6
+M87_MoDuas = M87_MoD/RADPERUAS
 
 SgrA_mass = 4.1e6 * 2e30
 SgrA_dist = 8*3.086e19

@@ -28,9 +28,9 @@ chi = -135/180*np.pi
 eta = None
 beta = 0.5
 a = -0.5
-thetabz=np.pi/2
+iota=np.pi/2
 
-b = KerrBam(fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=PA,  chi=chi,eta=eta, nmax=nmax, beta=beta, thetabz=thetabz, polflux=True)
+b = KerrBam(fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=PA,  chi=chi,eta=eta, nmax=nmax, beta=beta, iota=iota, polflux=True)
 
 im = b.make_image()
 im.rf = obs_sa.rf
@@ -54,13 +54,13 @@ chi_to_fit = chi#[-np.pi, 0]
 eta_to_fit = eta
 PA_to_fit = PA#288/180*np.pi
 zbl_to_fit = zbl#im.total_flux()
-thetabz_to_fit = thetabz#[np.pi/4,np.pi/2]
+iota_to_fit = iota#[np.pi/4,np.pi/2]
 truths = [a]
 nmax_to_fit = nmax
 # jargs_to_fit = jargs
 # M_to_fit=M
 # zbl = [0.5, 1.5]
-modelb = KerrBam(fov, npix, jfunc, jarg_names, jargs_to_fit, MoDuas_to_fit, a_to_fit, inc_to_fit, zbl_to_fit, PA=PA_to_fit, chi=chi_to_fit, nmax=nmax_to_fit, beta=beta_to_fit, thetabz = thetabz_to_fit)
+modelb = KerrBam(fov, npix, jfunc, jarg_names, jargs_to_fit, MoDuas_to_fit, a_to_fit, inc_to_fit, zbl_to_fit, PA=PA_to_fit, chi=chi_to_fit, nmax=nmax_to_fit, beta=beta_to_fit, iota = iota_to_fit)
 
 #let's fit!
 # pool = Pool(processes=8)

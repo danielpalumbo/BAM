@@ -74,7 +74,7 @@ def getlorentzboost(boost, chi):
     lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, 0],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, 0],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, 0],[0,0,0,1]])
     return lorentzboost
 
-def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
+def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
@@ -102,7 +102,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, thetabz):
 
     if fluid_eta is None:
         fluid_eta = chi+np.pi
-    bz = np.cos(thetabz)
+    bz = np.cos(iota)
     beq = np.sqrt(1-bz**2)
     br = beq*np.cos(fluid_eta)
     bphi = beq*np.sin(fluid_eta)

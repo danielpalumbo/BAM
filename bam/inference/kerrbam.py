@@ -173,6 +173,21 @@ class KerrBam:
         plt.close('all')
         # plt.show()
 
+    def get_primitives(self):
+        """
+        In fixed mode, return the rvecs associated with the current image grid.
+        """
+        if self.mode != 'fixed':
+            print("Can't directly evaluaTe rvecs in model mode!")
+            return
+
+        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, jargs = self.imparams
+
+        
+        #convert mudists to gravitational units
+        rhovec = self.MUDISTS/MoDuas
+        return kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota)        
+
     def compute_image(self, imparams):
         """
         Given a list of values of modeled parameters in imparams,

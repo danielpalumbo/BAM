@@ -54,7 +54,8 @@ def amp_add_syserr(amp, amp_error, fractional=0, additive=0):
 
 
 def vis_add_syserr(vis, amp_error, fractional=0, additive=0):
-    return amp_add_syserr(abs(vis), amp_error, fractional=fractional, additive=additive)
+    sigma = sqrt(amp_error**2+(fractional*np.abs(vis))**2+additive**2)
+    return vis, sigma
 
 
 def logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, fractional=0, additive = 0, debias=True):
@@ -160,6 +161,7 @@ def get_camp_amp_sigma(obs, logcamp_data):
     return qas_data.T
 
 def get_cphase_vis_sigma(obs, cphase_data):
+    data = obs.data
     tas_data = []
     pmask = np.array([data['time'][i] in cphase_data['time'] for i in range(len(data['time']))])
     pcsd = data[pmask]
@@ -182,12 +184,12 @@ def get_cphase_vis_sigma(obs, cphase_data):
         vis23 = pcsd[m23][0]
         vis31 = pcsd[m31][0]
         # vis14 = lcsd[m14][0]
-        vis12 = np.abs(vis12['vis'])
+        v1 = vis12['vis']
         sig12 = vis12['sigma']
-        vis23 = np.abs(vis23['vis'])
+        v2 = vis23['vis']
         sig23 = vis23['sigma']
-        vis31 = np.abs(vis31['vis'])
+        v3 = vis31['vis']
         sig31 = vis31['sigma']
-        tas_data.append([vis12, vis23, vis31, sig12, sig23, sig31])
+        tas_data.append([v1, v2, v3, sig12, sig23, sig31])
     tas_data = np.array(tas_data)
     return tas_data.T

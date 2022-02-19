@@ -319,7 +319,10 @@ class KerrBam:
             cphase_sigma = cphase_data['sigmacp']
             if self.error_modeling:
                 print("Back-fetching triangle amplitudes and sigmas.")
-                v1, v2, v3, v1err, v2err, v3err = get_cphase_amp_sigma(obs, cphase_data)
+                v1, v2, v3, v1err, v2err, v3err = get_cphase_vis_sigma(obs, cphase_data)
+                v1err = np.abs(v1err)
+                v2err = np.abs(v2err)
+                v3err = np.abs(v3err)
                 print("Done!")
             Ncphase = len(cphase)
         def loglike(params):
@@ -401,8 +404,6 @@ class KerrBam:
                 out += ln_norm
             if 'cphase' in data_types:
                 model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
-                # model_cphase = self.cphase(ivec, rotimxvec, rotimyvec, cphaseu1, cphaseu2, cphaseu3, cphasev1, cphasev2, cphasev3)
-                # cphaselike = -2/Ncphase * np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
                 if self.error_modeling:
                     new_cphase, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval[10], additive=to_eval[11])
                     cphaselike = -0.5*np.sum((1-np.cos(new_cphase-model_cphase))/new_cphase_err)

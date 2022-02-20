@@ -3,14 +3,12 @@ from numpy import abs, sqrt, log, angle
 
 def amp_debias(amp, sigma, force_nonzero=False):
     #amp and sigma must be real
-    if amp < sigma:
-        if force_nonzero:
-            debsqr = sigma**2
-        else:
-            debsqr = 0
-        
-    else :
-        debsqr = amp**2 - sigma**2
+    debsqr = amp**2
+    if force_nonzero:
+        debsqr[amp<sigma] = sigma**2
+    else:
+        debsqr[amp<sigma] = 0
+    debsqr[amp>sigma] = amp**2 - sigma**2
     
     return sqrt(debsqr)
 

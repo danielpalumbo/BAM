@@ -461,11 +461,11 @@ class KerrBam:
         self.recent_sampler=sampler
         return sampler
 
-    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft', sample='auto'):#, pool=None, queue_size=None):
+    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft', sample='auto', debias=True):#, pool=None, queue_size=None):
         self.source = obs.source
         self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
-        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype)
+        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound, sample=sample)#, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
         return sampler

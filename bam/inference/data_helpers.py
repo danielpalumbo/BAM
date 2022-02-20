@@ -34,7 +34,12 @@ def make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, 
         p2 = amp_debias(n2amp, n2err, force_nonzero=True)
         p3 = amp_debias(d1amp, d1err, force_nonzero=True)
         p4 = amp_debias(d2amp, d2err, force_nonzero=True)
-    
+    else:
+        p1 = n1amp
+        p2 = n2amp
+        p3 = d1amp
+        p4 = d2amp
+        
     snr1 = p1/n1err
     snr2 = p2/n2err
     snr3 = p3/d1err

@@ -395,7 +395,7 @@ class KerrBam:
                 # model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
                 # logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
                 if self.error_modeling:
-                    new_logcamp, new_logcamp_err = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, fractional=to_eval[10], additive = to_eval[11], debias=debias)
+                    _, new_logcamp_err = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, fractional=to_eval[10], additive = to_eval[11], debias=debias)
                     logcamplike = -0.5*np.sum((logcamp-model_logcamp)**2/new_logcamp_err**2)
                     ln_norm = logcamplike-np.sum(np.log((2.0*np.pi)**0.5 * new_logcamp_err)) 
                 else:
@@ -405,8 +405,8 @@ class KerrBam:
             if 'cphase' in data_types:
                 model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
                 if self.error_modeling:
-                    new_cphase, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval[10], additive=to_eval[11])
-                    cphaselike = -0.5*np.sum((1-np.cos(new_cphase-model_cphase))/new_cphase_err)
+                    _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval[10], additive=to_eval[11])
+                    cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err)
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(new_cphase_err)**2))) 
                 else:
                     cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)

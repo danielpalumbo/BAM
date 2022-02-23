@@ -15,6 +15,15 @@ M87_MoDuas = M87_MoD/RADPERUAS
 SgrA_mass = 4.1e6 * 2e30
 SgrA_dist = 8*3.086e19
 
+def varphi_grid_from_npix(npix):
+    pxi = (np.arange(npix)-0.01)/npix-0.5
+    pxj = np.arange(npix)/npix-0.5
+    # get angles measured north of west
+    PXI,PXJ = np.meshgrid(pxi,pxj)
+    varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
+    varphi[varphi==0]=np.min(varphi[varphi>0])/10
+    return varphi.flatten()
+
 def rho_conv(r, phi, inc):
     rhosq = r**2 * (1-np.sin(inc)**2*np.sin(phi)**2) + 2*r*(1+np.sin(inc)**2 * np.sin(phi)**2 + 2*np.sin(inc)*np.sin(phi))
     rho = np.sqrt(rhosq)

@@ -5,7 +5,7 @@ import ehtim as eh
 import matplotlib.pyplot as plt
 import random
 import dill as pkl
-from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable
+from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, varphi_grid_from_npix
 from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, logcamp_uvpairs, get_camp_amp_sigma, get_cphase_vis_sigma
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
@@ -591,8 +591,6 @@ class KerrBam:
             qvec = self.qvecs[n]
             uvec = self.uvecs[n]
             vvec = self.vvecs[n]
-        print(ivec.shape)
-        print(self.npix*self.adap_fac)
         im = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
         im.ivec = ivec
         im.qvec = qvec

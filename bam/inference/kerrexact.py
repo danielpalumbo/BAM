@@ -9,6 +9,7 @@ from scipy.special import ellipj, ellipk, ellipkinc
 from scipy.interpolate import griddata
 from skimage.transform import rescale, resize
 from scipy.signal import convolve2d
+from bam.inference.model_helpers import varphi_grid_from_npix
 
 
 minkmetric = np.diag([-1, 1, 1, 1])
@@ -337,13 +338,16 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac 
     for n in range(nmax+1):
         m += 1
         Ir = 1/np.sqrt(-um*a**2)*(2*m*ellipk(urat) - np.sign(beta)*Fobs)
-        Irmask = Ir>Ir_total
+        Irmask = Ir<Ir_total
 
         if (adap_fac > 1) and n>0:
-            Irmask = rescale(Irmask.reshape((xdim,xdim)), adap_fac, order=0)
-            Irmask = np.array(convolve2d(Irmask,kernel,mode='same'),dtype=bool).flatten()
+            Irmask = Irmask.reshape((xdim,xdim))
+            Irmask = convolve2d(Irmask, kernel,mode='same')
+            Irmask = rescale(Irmask, adap_fac, order=0)
+            Irmask = np.array(Irmask,dtype=bool).flatten()
             subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
-            subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
+            subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
+            # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             subrvec, subivec, subqvec, subuvec, subvvec, subredshift = raytrace_single_n(subrho, subvarphi, inc, a, n, boost, chi, fluid_eta, iota)
             rvec = np.zeros(adap_fac**2*xdim**2)
             ivec = np.zeros(adap_fac**2*xdim**2)
@@ -372,7 +376,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac 
             
             r[crit_mask] = ((Bgl*cr2 - Agl*cr1) + (Bgl*cr2+Agl*cr1)*cnnum) / ((Bgl-Agl)+(Bgl+Agl)*cnnum)
             r[eta_mask] =np.nan
-            r[Irmask] = np.nan
+            r[~Irmask] = np.nan
             rvec = np.nan_to_num(r)
             # rvecs.append(np.nan_to_num(r))
             bigR = R(r, a, lam, eta)

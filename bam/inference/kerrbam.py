@@ -29,7 +29,7 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., f=0., e=0., polflux=True, source='', periodic=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., f=0., e=0., polflux=True, source='', periodic=False, adap_fac =1):
         self.periodic=periodic
         self.dynamic=False
         self.source = source
@@ -65,6 +65,9 @@ class KerrBam:
         self.e = e
         self.nmax = nmax
         self.zbl = zbl
+        if adap_fac != 1:
+            print("Using adaptive ray-tracing! npix is interpreted as n=0 resolution only.")
+        self.adap_fac = adap_fac
         self.rho_c = np.sqrt(27)
         # self.Mscale = Mscale
         pxi = (np.arange(npix)-0.01)/npix-0.5
@@ -161,7 +164,7 @@ class KerrBam:
         
         #convert mudists to gravitational units
         rhovec = self.MUDISTS/MoDuas
-        return kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota)        
+        return kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
 
     def compute_image(self, imparams):
         """
@@ -173,7 +176,7 @@ class KerrBam:
         
         #convert mudists to gravitational units
         rhovec = self.MUDISTS/MoDuas
-        rvecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota)        
+        rvecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
         # if self.exacttype == 'interp':
             
         # elif self.exacttype == 'exact':
@@ -423,7 +426,7 @@ class KerrBam:
         find the MAP using scipy's dual annealing.
         """
         self.source = obs.source
-        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
+        self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ll = self.build_likelihood(obs, data_types=data_types,ttype=ttype)
         
 
@@ -436,7 +439,7 @@ class KerrBam:
             else:
                 to_eval.append(res.x[self.modeled_names.index(name)])
         # new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], iota=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
         new.modelim = new.make_image(modelim=True)
         return new
         
@@ -463,7 +466,7 @@ class KerrBam:
 
     def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft', sample='auto', debias=True):#, pool=None, queue_size=None):
         self.source = obs.source
-        self.modelim = eh.image.make_empty(self.npix,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
+        self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias)
         sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound, sample=sample)#, pool=pool, queue_size=queue_size)
@@ -538,7 +541,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(mean[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -558,7 +561,7 @@ class KerrBam:
                 to_eval.append(self.all_params[self.all_names.index(name)])
             else:
                 to_eval.append(sample[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -588,8 +591,9 @@ class KerrBam:
             qvec = self.qvecs[n]
             uvec = self.uvecs[n]
             vvec = self.vvecs[n]
-
-        im = eh.image.make_empty(self.npix,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
+        print(ivec.shape)
+        print(self.npix*self.adap_fac)
+        im = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
         im.ivec = ivec
         im.qvec = qvec
         im.uvec = uvec

@@ -410,10 +410,10 @@ class KerrBam:
                 model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
                 if self.error_modeling:
                     _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval[10], additive=to_eval[11])
-                    cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err)
+                    cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err**2)
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(new_cphase_err)**2))) 
                 else:
-                    cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma)
+                    cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma**2)
                     # ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(cphase_sigma)**2))) 
                 out += ln_norm

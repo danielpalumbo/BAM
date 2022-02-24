@@ -457,7 +457,7 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac 
             uvec = np.real(np.nan_to_num(uvec))
             vvec = np.real(np.nan_to_num(vvec))
             redshift = np.real(np.nan_to_num(redshift))
-            if adap_fac > 1:
+            if adap_fac > 1 and nmax>0:
                 rvec = rescale(rvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
                 ivec = rescale(ivec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
                 qvec = rescale(qvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()

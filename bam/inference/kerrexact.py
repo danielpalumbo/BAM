@@ -9,7 +9,7 @@ from scipy.special import ellipj, ellipk, ellipkinc
 from scipy.interpolate import griddata
 from skimage.transform import rescale, resize
 from scipy.signal import convolve2d
-from bam.inference.model_helpers import varphi_grid_from_npix
+from bam.inference.model_helpers import get_rho_varphi_from_FOV_npix
 
 
 minkmetric = np.diag([-1, 1, 1, 1])
@@ -262,11 +262,12 @@ def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota):
     return rvec, ivec, qvec, uvec, vvec, redshift
 
 
-def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1):
+def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
 
+    rho = mudists/MoDuas
     zeros = np.zeros_like(rho)
     npix = len(zeros)
     xdim = int(np.sqrt(npix))
@@ -345,8 +346,12 @@ def kerr_exact(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac 
             Irmask = convolve2d(Irmask, kernel,mode='same')
             Irmask = rescale(Irmask, adap_fac, order=0)
             Irmask = np.array(Irmask,dtype=bool).flatten()
-            subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
-            subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
+
+            subrho, subvarphi = get_rho_varphi_from_FOV_npix(fov_uas, adap_fac*xdim)
+            subrho = subrho[Irmask]
+            subvarphi = subvarphi[Irmask]
+            # subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
+            # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
             # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             subrvec, subivec, subqvec, subuvec, subvvec, subredshift = raytrace_single_n(subrho, subvarphi, inc, a, n, boost, chi, fluid_eta, iota)
             rvec = np.zeros(adap_fac**2*xdim**2)

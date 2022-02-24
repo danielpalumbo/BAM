@@ -5,7 +5,7 @@ import ehtim as eh
 import matplotlib.pyplot as plt
 import random
 import dill as pkl
-from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, varphi_grid_from_npix
+from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix
 from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, logcamp_uvpairs, get_camp_amp_sigma, get_cphase_vis_sigma
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
@@ -70,25 +70,26 @@ class KerrBam:
         self.adap_fac = adap_fac
         self.rho_c = np.sqrt(27)
         # self.Mscale = Mscale
-        pxi = (np.arange(npix)-0.01)/npix-0.5
-        pxj = np.arange(npix)/npix-0.5
-        # get angles measured north of west
-        PXI,PXJ = np.meshgrid(pxi,pxj)
-        varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
-        varphi[varphi==0]=np.min(varphi[varphi>0])/10
-        self.varphivec = varphi.flatten()
+        self.rho_uas, self.varphivec = get_rho_varphi_from_FOV_npix(self.fov_uas, self.npix)
+        # pxi = (np.arange(npix)-0.01)/npix-0.5
+        # pxj = np.arange(npix)/npix-0.5
+        # # get angles measured north of west
+        # PXI,PXJ = np.meshgrid(pxi,pxj)
+        # varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
+        # varphi[varphi==0]=np.min(varphi[varphi>0])/10
+        # self.varphivec = varphi.flatten()
         
-        #get grid of angular radii in uas
-        mui = pxi*self.fov_uas
-        muj = pxj*self.fov_uas
-        MUI,MUJ = np.meshgrid(mui,muj)
-        MUDISTS = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
-        self.MUDISTS = MUDISTS.flatten()
+        # #get grid of angular radii in uas
+        # mui = pxi*self.fov_uas
+        # muj = pxj*self.fov_uas
+        # MUI,MUJ = np.meshgrid(mui,muj)
+        # rho_uas = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
+        # self.rho_uas = rho_uas.flatten()
 
         #while we're at it, get x and y
-        self.imxvec = -self.MUDISTS*np.cos(self.varphivec)
+        self.imxvec = -self.rho_uas*np.cos(self.varphivec)
        
-        self.imyvec = self.MUDISTS*np.sin(self.varphivec)
+        self.imyvec = self.rho_uas*np.sin(self.varphivec)
         if any([isiterable(i) for i in [MoDuas, a, inc, zbl, PA, f, beta, chi, iota, e, spec]+jargs]):
             mode = 'model'
         else:
@@ -124,8 +125,8 @@ class KerrBam:
 
         if self.mode == 'fixed':
             self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.jargs]
-            self.rhovec = self.MUDISTS / self.MoDuas
-            # self.rhovec = D/(M*Mscale*Gpercsq*self.MUDISTS)
+            self.rhovec = self.rho_uas / self.MoDuas
+            # self.rhovec = D/(M*Mscale*Gpercsq*self.rho_uas)
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
             print("Fixed Bam: precomputing all subimages.")
             self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
@@ -162,9 +163,9 @@ class KerrBam:
         MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, jargs = self.imparams
 
         
-        #convert mudists to gravitational units
-        rhovec = self.MUDISTS/MoDuas
-        return kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
+        #convert rho_uas to gravitational units
+        # rhovec = self.rho_uas/MoDuas
+        return kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
 
     def compute_image(self, imparams):
         """
@@ -174,9 +175,9 @@ class KerrBam:
         MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, jargs = imparams
 
         
-        #convert mudists to gravitational units
-        rhovec = self.MUDISTS/MoDuas
-        rvecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
+        #convert rho_uas to gravitational units
+        # rhovec = self.rho_uas/MoDuas
+        rvecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
         # if self.exacttype == 'interp':
             
         # elif self.exacttype == 'exact':

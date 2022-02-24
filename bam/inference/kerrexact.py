@@ -348,7 +348,7 @@ def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid
             Irmask = np.array(Irmask,dtype=bool).flatten()
 
             subrho, subvarphi = get_rho_varphi_from_FOV_npix(fov_uas, adap_fac*xdim)
-            subrho = subrho[Irmask]
+            subrho = subrho[Irmask] / MoDuas
             subvarphi = subvarphi[Irmask]
             # subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]

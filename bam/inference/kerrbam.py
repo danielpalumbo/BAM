@@ -65,9 +65,13 @@ class KerrBam:
         self.e = e
         self.nmax = nmax
         self.zbl = zbl
+        if self.nmax == 0 and adap_fac != 1:
+            print ("You are trying to use adaptive ray tracing for non-existed sub-images. adap_fac is being forced to 1.")
+            self.adap_fac = 1
+        else:
+            self.adap_fac = adap_fac
         if adap_fac != 1:
             print("Using adaptive ray-tracing! npix is interpreted as n=0 resolution only.")
-        self.adap_fac = adap_fac
         self.rho_c = np.sqrt(27)
         # self.Mscale = Mscale
         self.rho_uas, self.varphivec = get_rho_varphi_from_FOV_npix(self.fov_uas, self.npix)

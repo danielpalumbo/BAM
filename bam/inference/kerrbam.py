@@ -425,14 +425,14 @@ class KerrBam:
         print("Built combined likelihood function!")
         return loglike
 
-    def annealing_MAP(self, obs, data_types=['vis'], ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0):
+    def annealing_MAP(self, obs, data_types=['vis'], ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True):
         """
         Given an observation and a list of data product names, 
         find the MAP using scipy's dual annealing.
         """
         self.source = obs.source
         self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
-        ll = self.build_likelihood(obs, data_types=data_types,ttype=ttype)
+        ll = self.build_likelihood(obs, data_types=data_types,ttype=ttype, debias=debias)
         
 
         res =  dual_annealing(lambda x: -ll(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)

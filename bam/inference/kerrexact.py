@@ -83,7 +83,7 @@ def getlorentzboost(boost, chi):
 # def kerr_exact_interpgrid(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, interpgrid_x, interpgrid_y):
 
 
-def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota):
+def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota, compute_V=False):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
@@ -217,8 +217,10 @@ def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota):
     fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
     fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
     fupperfluid = np.swapaxes(fupperfluid, 1,2)
-    vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
-
+    if compute_V:
+        vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
+    else:
+        vvec = zeros
     #apply the tetrad to get kerr f
     kfuppers = np.matmul(coordtransforminv, fupperfluid)
     kft = kfuppers[:,0,0]
@@ -245,24 +247,23 @@ def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota):
     
     qvec *= lp
     uvec *= lp
-    ivec = np.sqrt(qvec**2+uvec**2)
     # rpmask = np.abs(r-rp) < 0.01*rp
     # ivec[rpmask]=0.
     # qvec[rpmask]=0.
     # uvec[rpmask]=0.
     # vvec[rpmask]=0.
-    ivec = np.real(np.nan_to_num(ivec))
+    # ivec = np.real(np.nan_to_num(ivec))
     qvec = np.real(np.nan_to_num(qvec))
     uvec = np.real(np.nan_to_num(uvec))
-    vvec = np.real(np.nan_to_num(vvec))
+    if compute_V:
+        vvec = np.real(np.nan_to_num(vvec))
     redshift = np.real(np.nan_to_num(redshift))
-
-
-
+    ivec = np.sqrt(qvec**2+uvec**2)
+    
     return rvec, ivec, qvec, uvec, vvec, redshift
 
 
-def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1):
+def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1, compute_V=False):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
@@ -353,17 +354,19 @@ def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid
             # subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
             # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
-            subrvec, subivec, subqvec, subuvec, subvvec, subredshift = raytrace_single_n(subrho, subvarphi, inc, a, n, boost, chi, fluid_eta, iota)
+            subrvec, subivec, subqvec, subuvec, subvvec, subredshift = raytrace_single_n(subrho, subvarphi, inc, a, n, boost, chi, fluid_eta, iota, compute_V=compute_V)
             rvec = np.zeros(adap_fac**2*xdim**2)
             ivec = np.zeros(adap_fac**2*xdim**2)
             qvec = np.zeros(adap_fac**2*xdim**2)
             uvec = np.zeros(adap_fac**2*xdim**2)
+            vvec = np.zeros(adap_fac**2*xdim**2)
             redshift = np.zeros(adap_fac**2*xdim**2)
             rvec[Irmask] = subrvec.flatten()
             ivec[Irmask] = subivec.flatten()
             qvec[Irmask] = subqvec.flatten()
             uvec[Irmask] = subuvec.flatten()
-            vvec[Irmask] = subvvec.flatten()
+            if compute_V:
+                vvec[Irmask] = subvvec.flatten()
             redshift[Irmask] = subredshift.flatten()
         else:
             signpr[~crit_mask] = np.sign(Ir_turn-Ir[~crit_mask])
@@ -423,8 +426,10 @@ def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid
             fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
             fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
             fupperfluid = np.swapaxes(fupperfluid, 1,2)
-            vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
-
+            if compute_V:
+                vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
+            else:
+                vvec = zeros
             #apply the tetrad to get kerr f
             kfuppers = np.matmul(coordtransforminv, fupperfluid)
             kft = kfuppers[:,0,0]
@@ -451,24 +456,30 @@ def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid
             
             qvec *= lp
             uvec *= lp
-            ivec = np.sqrt(qvec**2+uvec**2)
+            # ivec = np.sqrt(qvec**2+uvec**2)
             # rpmask = np.abs(r-rp) < 0.01*rp
             # ivec[rpmask]=0.
             # qvec[rpmask]=0.
             # uvec[rpmask]=0.
             # vvec[rpmask]=0.
-            ivec = np.real(np.nan_to_num(ivec))
+            # ivec = np.real(np.nan_to_num(ivec))
             qvec = np.real(np.nan_to_num(qvec))
             uvec = np.real(np.nan_to_num(uvec))
-            vvec = np.real(np.nan_to_num(vvec))
+            if compute_V:
+                vvec = np.real(np.nan_to_num(vvec))
             redshift = np.real(np.nan_to_num(redshift))
             if adap_fac > 1 and nmax>0:
                 rvec = rescale(rvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
-                ivec = rescale(ivec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+                # ivec = rescale(ivec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
                 qvec = rescale(qvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
                 uvec = rescale(uvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
-                vvec = rescale(vvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+                
+                if compute_V:
+                    vvec = rescale(vvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+                else:
+                    vvec = np.zeros(adap_fac**2*xdim**2)
                 redshift = rescale(redshift.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+            ivec = np.sqrt(qvec**2+uvec**2)
         rvecs.append(rvec)
         ivecs.append(ivec)
         qvecs.append(qvec)

@@ -434,9 +434,9 @@ class KerrBam:
         self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ll = self.build_likelihood(obs, data_types=data_types,ttype=ttype, debias=debias)
         
-
+        print("Running dual annealing...")
         res =  dual_annealing(lambda x: -ll(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)
-        
+        print("Done!")
         to_eval = []
         for name in self.all_names:
             if not(name in self.modeled_names):

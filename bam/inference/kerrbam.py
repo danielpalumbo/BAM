@@ -66,7 +66,7 @@ class KerrBam:
         self.nmax = nmax
         self.zbl = zbl
         if self.nmax == 0 and adap_fac != 1:
-            print ("You are trying to use adaptive ray tracing for non-existed sub-images. adap_fac is being forced to 1.")
+            print ("You are trying to use adaptive ray tracing for non-existant sub-images. adap_fac is being forced to 1.")
             self.adap_fac = 1
         else:
             self.adap_fac = adap_fac

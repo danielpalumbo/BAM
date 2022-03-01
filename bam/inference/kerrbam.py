@@ -460,21 +460,21 @@ class KerrBam:
         return ptform
 
     
-    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi', sample='auto'):#, pool=None, queue_size=None):
+    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi', sample='auto', pool=None, queue_size=None):
         self.dynamic=dynamic
         if dynamic:
-            sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, sample=sample)#, pool=pool, queue_size=queue_size)
+            sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, sample=sample, pool=pool, queue_size=queue_size)
         else:
-            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, sample=sample)#, pool=pool, queue_size=queue_size)
+            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, sample=sample, pool=pool, queue_size=queue_size)
         self.recent_sampler=sampler
         return sampler
 
-    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft', sample='auto', debias=True):#, pool=None, queue_size=None):
+    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None):
         self.source = obs.source
         self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias)
-        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound, sample=sample)#, pool=pool, queue_size=queue_size)
+        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
         return sampler
 

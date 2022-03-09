@@ -17,8 +17,8 @@ SgrA_dist = 8*3.086e19
 
 def get_rho_varphi_from_FOV_npix(fov_uas, npix):
 
-    pxi = (np.arange(npix)-0.01)/npix-0.5
-    pxj = np.arange(npix)/npix-0.5
+    pxi = (np.arange(npix)+0.5)/npix-0.5
+    pxj = (np.arange(npix)+0.5)/npix-0.5
     # get angles measured north of west
     PXI,PXJ = np.meshgrid(pxi,pxj)
     varphi = np.arctan2(-PXJ,PXI)# - np.pi/2

@@ -366,28 +366,28 @@ class KerrBam:
             if 'vis' in data_types:
                 sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
                 # model_vis = self.modelim_ivis(visuv, ttype=ttype)
-                vislike = -np.sum(np.abs(model_ivis-vis)**2 / sd**2)
+                vislike = -0.5 * np.sum(np.abs(model_ivis-vis)**2 / sd**2)
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'qvis' in data_types:
                 sd = sqrt(qsigma**2.0 +(to_eval[10]*qamp)**2.0+to_eval[11]**2.0)
-                qvislike = -np.sum(np.abs(model_qvis-qvis)**2.0/sd**2)
+                qvislike = -0.5 * np.sum(np.abs(model_qvis-qvis)**2.0/sd**2)
                 ln_norm = qvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'uvis' in data_types:
                 sd = sqrt(usigma**2.0 +(to_eval[10]*uamp)**2.0+to_eval[11]**2.0)
-                uvislike = -np.sum(np.abs(model_uvis-uvis)**2.0/sd**2)
+                uvislike = -0.5 * np.sum(np.abs(model_uvis-uvis)**2.0/sd**2)
                 ln_norm = uvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'vvis' in data_types:
                 sd = sqrt(vsigma**2.0 +(to_eval[10]*vamp)**2.0+to_eval[11]**2.0)
-                vvislike = -np.sum(np.abs(model_vvis-vvis)**2.0/sd**2)
+                vvislike = -0.5 * np.sum(np.abs(model_vvis-vvis)**2.0/sd**2)
                 ln_norm = vvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'mvis' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
-                sd = vsigma*sd/sigma
-                mvislike = -np.sum(np.abs(model_mvis-mvis)**2.0/sd**2)
+                sd = sqrt(msigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
+                #sd = vsigma*sd/sigma
+                mvislike = -0.5 * np.sum(np.abs(model_mvis-mvis)**2.0/sd**2)
                 ln_norm = mvislike -2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out+=ln_norm
             if 'amp' in data_types:
@@ -414,10 +414,10 @@ class KerrBam:
                 model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
                 if self.error_modeling:
                     _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval[10], additive=to_eval[11])
-                    cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err**2)
+                    cphaselike = -np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err**2)
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(new_cphase_err)**2))) 
                 else:
-                    cphaselike = -0.5*np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma**2)
+                    cphaselike = -np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma**2)
                     # ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(cphase_sigma)**2))) 
                 out += ln_norm

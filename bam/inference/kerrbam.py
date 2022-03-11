@@ -621,13 +621,13 @@ class KerrBam:
         out.pa = 0
         return out
 
-    def logcamp_chisq(self,obs):
+    def logcamp_chisq(self,obs, debias=True):
         if self.mode != 'fixed':
             print("Can only compute chisqs to fixed model!")
             return
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
-        logcamp_data = obs.c_amplitudes(ctype='logcamp')
+        logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
         sigmaca = logcamp_data['sigmaca']
         logcamp = logcamp_data['camp']
         campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
@@ -671,7 +671,7 @@ class KerrBam:
         vis_chisq = np.sum((absdelta/sd)**2)/(2*len(vis))
         return vis_chisq
 
-    def amp_chisq(self,obs):
+    def amp_chisq(self,obs,debias=True):
         if self.mode !='fixed':
             print("Can only compute chisqs to fixed model!")
             return
@@ -680,7 +680,7 @@ class KerrBam:
         u = obs.data['u']
         v = obs.data['v']
         sigma = obs.data['sigma']  
-        amp = obs.unpack('amp')['amp']
+        amp = obs.unpack('amp',debias=debias)['amp']
         # vis = obs.data['vis']
         sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
         uv = np.vstack([u,v]).T
@@ -691,13 +691,13 @@ class KerrBam:
         return amp_chisq
 
 
-    def all_chisqs(self, obs):
+    def all_chisqs(self, obs, debias=True):
         if self.mode !='fixed':
             print("Can only compute chisqs to fixed model!")
             return
-        logcamp_chisq = self.logcamp_chisq(obs)
+        logcamp_chisq = self.logcamp_chisq(obs, debias=debias)
         cphase_chisq = self.cphase_chisq(obs)
-        amp_chisq = self.amp_chisq(obs)
+        amp_chisq = self.amp_chisq(obs, debias=debias)
         vis_chisq = self.vis_chisq(obs)
         return {'logcamp':logcamp_chisq,'cphase':cphase_chisq,'vis':vis_chisq,'amp':amp_chisq}
 

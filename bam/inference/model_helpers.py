@@ -15,6 +15,25 @@ M87_MoDuas = M87_MoD/RADPERUAS
 SgrA_mass = 4.1e6 * 2e30
 SgrA_dist = 8*3.086e19
 
+from skimage.transform import rescale, resize
+
+
+def rescale_veclist(veclist):
+    """
+    Given a list of flattened arrays which are
+    ordered by size, use the last array to rescale all
+    the others.
+    """
+    ref = veclist[-1]
+    xdim = int(np.sqrt(len(ref)))
+    outlist = []
+    for i in range(len(veclist)-1):
+        subxdim = int(np.sqrt(len(veclist[i])))
+        outlist.append(resize(veclist[i].reshape((subxdim,subxdim)), (xdim,xdim), mode='edge', order=1).flatten())
+    outlist.append(ref)
+    return outlist
+
+
 def get_rho_varphi_from_FOV_npix(fov_uas, npix):
 
     pxi = (np.arange(npix)+0.5)/npix-0.5

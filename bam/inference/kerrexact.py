@@ -468,17 +468,17 @@ def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid
             if compute_V:
                 vvec = np.real(np.nan_to_num(vvec))
             redshift = np.real(np.nan_to_num(redshift))
-            if adap_fac > 1 and nmax>0:
-                rvec = rescale(rvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
-                # ivec = rescale(ivec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
-                qvec = rescale(qvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
-                uvec = rescale(uvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+            # if adap_fac > 1 and nmax>0:
+            #     rvec = rescale(rvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+            #     # ivec = rescale(ivec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+            #     qvec = rescale(qvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+            #     uvec = rescale(uvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
                 
-                if compute_V:
-                    vvec = rescale(vvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
-                else:
-                    vvec = np.zeros(adap_fac**2*xdim**2)
-                redshift = rescale(redshift.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+            #     if compute_V:
+            #         vvec = rescale(vvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+            #     else:
+            #         vvec = np.zeros(adap_fac**2*xdim**2)
+            #     redshift = rescale(redshift.reshape((xdim,xdim)),adap_fac,order=1).flatten()
             ivec = np.sqrt(qvec**2+uvec**2)
         rvecs.append(rvec)
         ivecs.append(ivec)

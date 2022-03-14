@@ -5,7 +5,7 @@ import ehtim as eh
 import matplotlib.pyplot as plt
 import random
 import dill as pkl
-from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix
+from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix, rescale_veclist
 from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, logcamp_uvpairs, get_camp_amp_sigma, get_cphase_vis_sigma
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
@@ -134,6 +134,10 @@ class KerrBam:
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
             print("Fixed Bam: precomputing all subimages.")
             self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
+            # self.ivecs = rescale_veclist(self.ivecs)
+            # self.qvecs = rescale_veclist(self.qvecs)
+            # self.uvecs = rescale_veclist(self.uvecs)
+            # self.vvecs = rescale_veclist(self.vvecs)
                 # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
             # elif self.exacttype =='interp':
             #     print("Can't precompute subimages without all interpolators!")
@@ -199,7 +203,10 @@ class KerrBam:
                 qvecs[n] = ivecs[n]*0
                 uvecs[n] = ivecs[n]*0
                 vvecs[n] = ivecs[n]*0
-
+        ivecs = rescale_veclist(ivecs)
+        qvecs = rescale_veclist(qvecs)
+        uvecs = rescale_veclist(uvecs)
+        vvecs = rescale_veclist(vvecs)
         tf = np.sum(ivecs)
         ivecs = [ivec*zbl/tf for ivec in ivecs]
         qvecs = [qvec*zbl/tf for qvec in qvecs]
@@ -346,6 +353,10 @@ class KerrBam:
             #f and e are not used in image computation, so slice around them for now
             imparams = to_eval[:10] + [to_eval[12:]]
             ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)#, rotimxvec, rotimyvec 
+            # ivecs = rescale_veclist(ivecs)
+            # qvecs = rescale_veclist(qvecs)
+            # uvecs = rescale_veclist(uvecs)
+            # vvecs = rescale_veclist(vvecs)
             out = 0.
             ivec = np.sum(ivecs,axis=0)
             qvec = np.sum(qvecs,axis=0)
@@ -582,7 +593,10 @@ class KerrBam:
             self.ivecs
         except:
             self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
-        
+            # self.ivecs = rescale_veclist(self.ivecs)
+            # self.qvecs = rescale_veclist(self.qvecs)
+            # self.uvecs = rescale_veclist(self.uvecs)
+            # self.vvecs = rescale_veclist(self.vvecs)
                 
         # imparams = self.all_params[:9] + [self.all_params[11:]]
         # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)

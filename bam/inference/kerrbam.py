@@ -34,13 +34,6 @@ class KerrBam:
         self.dynamic=False
         self.source = source
         self.polflux = polflux
-        # self.exacttype = exacttype
-        # self.K_int = K_int
-        # self.Fobs_int = Fobs_int
-        # self.fobs_outer_int = fobs_outer_int
-        # self.fobs_inner_ints = fobs_inner_ints
-        # self.sn_outer_int = sn_outer_int
-        # self.sn_inner_ints = sn_inner_ints
         self.fov = fov
         self.fov_uas = fov/eh.RADPERUAS
         self.npix = npix
@@ -75,20 +68,6 @@ class KerrBam:
         self.rho_c = np.sqrt(27)
         # self.Mscale = Mscale
         self.rho_uas, self.varphivec = get_rho_varphi_from_FOV_npix(self.fov_uas, self.npix)
-        # pxi = (np.arange(npix)-0.01)/npix-0.5
-        # pxj = np.arange(npix)/npix-0.5
-        # # get angles measured north of west
-        # PXI,PXJ = np.meshgrid(pxi,pxj)
-        # varphi = np.arctan2(-PXJ,PXI)# - np.pi/2
-        # varphi[varphi==0]=np.min(varphi[varphi>0])/10
-        # self.varphivec = varphi.flatten()
-        
-        # #get grid of angular radii in uas
-        # mui = pxi*self.fov_uas
-        # muj = pxj*self.fov_uas
-        # MUI,MUJ = np.meshgrid(mui,muj)
-        # rho_uas = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
-        # self.rho_uas = rho_uas.flatten()
 
         #while we're at it, get x and y
         self.imxvec = -self.rho_uas*np.cos(self.varphivec)
@@ -100,21 +79,23 @@ class KerrBam:
             mode = 'fixed' 
         self.mode = mode
 
-        # self.all_interps = [K_int, Fobs_int, fobs_outer_int, fobs_inner_ints, sn_outer_int, sn_inner_ints]
-        # self.all_interp_names = ['K','Fobs','fobs_outer','fobs_inner','sn_outer','sn_inner']
         self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, f, e]+jargs
         self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','f','e']+jarg_names
+        self.imparam_names = [i for i in self.all_names if i not in ['f','e']]
+        self.all_param_dict = dict()
+        for i in range(len(self.all_names)):
+            self.all_param_dict[self.all_names[i]] = self.all_params[i]
+
         self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
         self.modeled_names = [self.all_names[i] for i in self.modeled_indices]
         self.error_modeling = 'f' in self.modeled_names or 'e' in self.modeled_names
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
-        # print(len(self.modeled_indices))
-        # print(len(self.modeled_names))
-        # print(len(self.modeled_params))
+        self.modeled_param_dict = dict()
+        for i in range(len(self.modeled_names)):
+            self.modeled_param_dict[modeled_names[i]]=self.modeled_params[i]
+
         self.periodic_names = []
         self.periodic_indices=[]
-        #if PA and chi are being modeled, check if they are allowing a full 2pi wrap
-        #if so, let dynesty know they are periodic later
         if self.periodic:
             for i in ['PA','chi']:
                 if i in self.modeled_names:
@@ -124,8 +105,6 @@ class KerrBam:
                         self.periodic_names.append(i)
                         self.periodic_indices.append(self.modeled_names.index(i))
         self.model_dim = len(self.modeled_names)
-        # self.periodic_names = [i for i in ['PA','chi'] if i in self.modeled_names]
-        # self.periodic_indices = [self.modeled_names.index(i) for i in self.periodic_names]
 
         if self.mode == 'fixed':
             self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.jargs]
@@ -134,19 +113,7 @@ class KerrBam:
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
             print("Fixed Bam: precomputing all subimages.")
             self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
-            # self.ivecs = rescale_veclist(self.ivecs)
-            # self.qvecs = rescale_veclist(self.qvecs)
-            # self.uvecs = rescale_veclist(self.uvecs)
-            # self.vvecs = rescale_veclist(self.vvecs)
-                # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams), self.rotimxvec, self.rotimyvec 
-            # elif self.exacttype =='interp':
-            #     print("Can't precompute subimages without all interpolators!")
         self.modelim = None
-        # if self.exacttype=='interp':
-        #     for i in range(len(self.all_interp_names)):
-        #         if self.all_interps[i] is None:
-        #             print(self.all_interp_names[i]+' does not have a specified interpolator!')
-            
         print("Finished building KerrBam! in "+ self.mode +" mode!")#" with exacttype " +self.exacttype)
 
 
@@ -184,12 +151,7 @@ class KerrBam:
 
         
         #convert rho_uas to gravitational units
-        # rhovec = self.rho_uas/MoDuas
         rvecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
-        # if self.exacttype == 'interp':
-            
-        # elif self.exacttype == 'exact':
-        #     rvecs, ivecs, qvecs, uvecs, redshifts = kerr_exact(rhovec, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, interp=False)
             
         for n in range(self.nmax+1):
             profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+spec)
@@ -212,7 +174,7 @@ class KerrBam:
         qvecs = [qvec*zbl/tf for qvec in qvecs]
         uvecs = [uvec*zbl/tf for uvec in uvecs]
         vvecs = [vvec*zbl/tf for vvec in vvecs]
-        return ivecs, qvecs, uvecs, vvecs #, rotimxvec, rotimyvec
+        return ivecs, qvecs, uvecs, vvecs 
 
 
 
@@ -252,6 +214,16 @@ class KerrBam:
         phase31 = np.angle(vis31)
         cphase_model = phase12+phase23+phase31
         return cphase_model
+
+    def build_eval(self, indexable_fitparams):
+        infi = indexable_fitparams
+        to_eval = dict()
+        for name in self.all_names:
+            if not(name in self.modeled_names):
+                to_eval[name] = self.all_param_dict[name]
+            else:
+                to_eval[name] = infi[self.modeled_names.index(name)]
+        return to_eval
     
 
     def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True):
@@ -341,22 +313,10 @@ class KerrBam:
                 print("Done!")
             Ncphase = len(cphase)
         def loglike(params):
-            to_eval = []
-            for name in self.all_names:
-                if not(name in self.modeled_names):
-                    to_eval.append(self.all_params[self.all_names.index(name)])
-                else:
-                    to_eval.append(params[self.modeled_names.index(name)])
-            #at this point, to_eval contains the full model description,
-            #so it should have 13+N parameters where N is the number of jargs
-            #MoDuas, inc, zbl, PA, beta, chi, iota, spec, f, e + jargs
-            #f and e are not used in image computation, so slice around them for now
-            imparams = to_eval[:10] + [to_eval[12:]]
-            ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)#, rotimxvec, rotimyvec 
-            # ivecs = rescale_veclist(ivecs)
-            # qvecs = rescale_veclist(qvecs)
-            # uvecs = rescale_veclist(uvecs)
-            # vvecs = rescale_veclist(vvecs)
+            to_eval = build_eval(params)
+
+            imparams = [to_eval[ipn] for ipn in self.imparam_names]
+            ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)
             out = 0.
             ivec = np.sum(ivecs,axis=0)
             qvec = np.sum(qvecs,axis=0)
@@ -375,34 +335,34 @@ class KerrBam:
                 
 
             if 'vis' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 # model_vis = self.modelim_ivis(visuv, ttype=ttype)
                 vislike = -0.5 * np.sum(np.abs(model_ivis-vis)**2 / sd**2)
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'qvis' in data_types:
-                sd = sqrt(qsigma**2.0 +(to_eval[10]*qamp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(qsigma**2.0 +(to_eval['f']*qamp)**2.0+to_eval['e']**2.0)
                 qvislike = -0.5 * np.sum(np.abs(model_qvis-qvis)**2.0/sd**2)
                 ln_norm = qvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'uvis' in data_types:
-                sd = sqrt(usigma**2.0 +(to_eval[10]*uamp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(usigma**2.0 +(to_eval['f']*uamp)**2.0+to_eval['e']**2.0)
                 uvislike = -0.5 * np.sum(np.abs(model_uvis-uvis)**2.0/sd**2)
                 ln_norm = uvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'vvis' in data_types:
-                sd = sqrt(vsigma**2.0 +(to_eval[10]*vamp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(vsigma**2.0 +(to_eval['f']*vamp)**2.0+to_eval['e']**2.0)
                 vvislike = -0.5 * np.sum(np.abs(model_vvis-vvis)**2.0/sd**2)
                 ln_norm = vvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'mvis' in data_types:
-                sd = sqrt(msigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(msigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 #sd = vsigma*sd/sigma
                 mvislike = -0.5 * np.sum(np.abs(model_mvis-mvis)**2.0/sd**2)
                 ln_norm = mvislike -2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out+=ln_norm
             if 'amp' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval[10]*amp)**2.0+to_eval[11]**2.0)
+                sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 model_amp = np.abs(self.modelim_ivis(ampuv, ttype=ttype))
                 # model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
                 # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
@@ -414,7 +374,7 @@ class KerrBam:
                 # model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
                 # logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
                 if self.error_modeling:
-                    _, new_logcamp_err = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, fractional=to_eval[10], additive = to_eval[11], debias=debias)
+                    _, new_logcamp_err = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, fractional=to_eval['f'], additive = to_eval['e'], debias=debias)
                     logcamplike = -0.5*np.sum((logcamp-model_logcamp)**2/new_logcamp_err**2)
                     ln_norm = logcamplike-np.sum(np.log((2.0*np.pi)**0.5 * new_logcamp_err)) 
                 else:
@@ -424,7 +384,7 @@ class KerrBam:
             if 'cphase' in data_types:
                 model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
                 if self.error_modeling:
-                    _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval[10], additive=to_eval[11])
+                    _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval['f'], additive=to_eval['e'])
                     cphaselike = -np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err**2)
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(new_cphase_err)**2))) 
                 else:
@@ -435,6 +395,10 @@ class KerrBam:
             return out
         print("Built combined likelihood function!")
         return loglike
+
+    def KerrBAM_from_eval(self, to_eval):
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, [to_eval[jn] for jn in self.jarg_names], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
+        return new
 
     def annealing_MAP(self, obs, data_types=['vis'], ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True):
         """
@@ -448,14 +412,9 @@ class KerrBam:
         print("Running dual annealing...")
         res =  dual_annealing(lambda x: -ll(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)
         print("Done!")
-        to_eval = []
-        for name in self.all_names:
-            if not(name in self.modeled_names):
-                to_eval.append(self.all_params[self.all_names.index(name)])
-            else:
-                to_eval.append(res.x[self.modeled_names.index(name)])
-        # new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[13:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], to_eval[4], PA=to_eval[5],  nmax=self.nmax, beta=to_eval[6], chi=to_eval[7], eta = to_eval[8], iota=to_eval[9], spec=to_eval[10], f=to_eval[11], e=to_eval[12],exacttype=self.exacttype, K_int = self.K_int, Fobs_int = self.Fobs_int, fobs_outer_int = self.fobs_outer_int, fobs_inner_ints = self.fobs_inner_ints, sn_outer_int = self.sn_outer_int, sn_inner_ints = self.sn_inner_ints, Mscale = self.Mscale, polflux=self.polflux,source=self.source)
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
+
+        to_eval = build_eval(res.x)
+        new = KerrBAM_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
         
@@ -551,13 +510,8 @@ class KerrBam:
 
     def MOP_Bam(self):
         mean, cov = self.mean_and_cov()
-        to_eval = []
-        for name in self.all_names:
-            if not(name in self.modeled_names):
-                to_eval.append(self.all_params[self.all_names.index(name)])
-            else:
-                to_eval.append(mean[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
+        to_eval = build_eval(mean)
+        new = KerrBAM_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -571,13 +525,8 @@ class KerrBam:
         if samples is None:
             samples = self.resample_equal()
         sample = samples[random.randint(0,len(samples)-1)]
-        to_eval = []
-        for name in self.all_names:
-            if not(name in self.modeled_names):
-                to_eval.append(self.all_params[self.all_names.index(name)])
-            else:
-                to_eval.append(sample[self.modeled_names.index(name)])
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval[12:], to_eval[0], to_eval[1], to_eval[2], to_eval[3], PA=to_eval[4],  nmax=self.nmax, beta=to_eval[5], chi=to_eval[6], eta = to_eval[7], iota=to_eval[8], spec=to_eval[9], f=to_eval[10], e=to_eval[11],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
+        to_eval = build_eval(sample)
+        new = KerrBAM_from_eval(sample)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -593,13 +542,7 @@ class KerrBam:
             self.ivecs
         except:
             self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
-            # self.ivecs = rescale_veclist(self.ivecs)
-            # self.qvecs = rescale_veclist(self.qvecs)
-            # self.uvecs = rescale_veclist(self.uvecs)
-            # self.vvecs = rescale_veclist(self.vvecs)
-                
-        # imparams = self.all_params[:9] + [self.all_params[11:]]
-        # ivecs, qvecs, uvecs, rotimxvec, rotimyvec = self.compute_image(imparams)
+
         if n =='all':
             ivec = np.sum(self.ivecs,axis=0)
             qvec = np.sum(self.qvecs,axis=0)

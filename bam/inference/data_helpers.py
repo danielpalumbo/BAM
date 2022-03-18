@@ -1,6 +1,10 @@
 import numpy as np
 from numpy import abs, sqrt, log, angle
 
+def var_sys(var_a, var_b, var_c, var_u0, u):
+    return var_a**2 * (u/var_u0)**var_c / (1+(u/var_u0)**(var_b+var_c))
+
+
 def amp_debias(amp, sigma, force_nonzero=False):
     #amp and sigma must be real
     debsqr = amp**2
@@ -52,21 +56,21 @@ def make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, 
     return logcamp, logcamp_err
 
 
-def amp_add_syserr(amp, amp_error, fractional=0, additive=0):
-    sigma = sqrt(amp_error**2+(fractional*amp)**2+additive**2)
+def amp_add_syserr(amp, amp_error, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, u = 0):
+    sigma = sqrt(amp_error**2+(fractional*amp)**2+additive**2 + var_sys(var_a, var_b, var_c, var_u0, u))
     return amp, sigma
 
 
-def vis_add_syserr(vis, amp_error, fractional=0, additive=0):
-    sigma = sqrt(amp_error**2+(fractional*np.abs(vis))**2+additive**2)
+def vis_add_syserr(vis, amp_error, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, u = 0):
+    sigma = sqrt(amp_error**2+(fractional*np.abs(vis))**2+additive**2 + var_sys(var_a, var_b, var_c, var_u0, u))
     return vis, sigma
 
 
-def logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, fractional=0, additive = 0, debias=True):
-    n1amp, n1err = amp_add_syserr(n1amp, n1err, fractional=fractional, additive=additive)
-    n2amp, n2err = amp_add_syserr(n2amp, n2err, fractional=fractional, additive=additive)
-    d1amp, d1err = amp_add_syserr(d1amp, d1err, fractional=fractional, additive=additive)
-    d2amp, d2err = amp_add_syserr(d2amp, d2err, fractional=fractional, additive=additive)
+def logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, campd1, campd2, campd3, campd4, fractional=0, additive = 0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, debias=True):
+    n1amp, n1err = amp_add_syserr(n1amp, n1err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd1)
+    n2amp, n2err = amp_add_syserr(n2amp, n2err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd2)
+    d1amp, d1err = amp_add_syserr(d1amp, d1err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd3)
+    d2amp, d2err = amp_add_syserr(d2amp, d2err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd4)
     return make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, debias=debias)
 
 
@@ -82,15 +86,15 @@ def closure_phase_from_bispectrum(bi, bisig):
     return cphase, cphase_error
 
 
-def bispectrum_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=0, additive=0):
-    v1, v1err =vis_add_syserr(v1, v1err, fractional=fractional, additive=additive)
-    v2, v2err =vis_add_syserr(v2, v2err, fractional=fractional, additive=additive)
-    v3, v3err =vis_add_syserr(v3, v3err, fractional=fractional, additive=additive)
+def bispectrum_add_syserr(v1, v2, v3, v1err, v2err, v3err, bisd1, bisd2, bisd3, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9):
+    v1, v1err =vis_add_syserr(v1, v1err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u=bisd1)
+    v2, v2err =vis_add_syserr(v2, v2err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u=bisd2)
+    v3, v3err =vis_add_syserr(v3, v3err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u=bisd3)
     return make_bispectrum(v1, v2, v3, v1err, v2err, v3err)
 
 
-def cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=0, additive=0):
-    bi, bisig = bispectrum_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=fractional, additive=additive)
+def cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, cphased1, cphased2, cphased3, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9):
+    bi, bisig = bispectrum_add_syserr(v1, v2, v3, v1err, v2err, v3err, cphased1, cphased2, cphased3, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0)
     return closure_phase_from_bispectrum(bi, bisig)
 
 
@@ -104,6 +108,18 @@ def cphase_uvpairs(cphase_data):
     cphaseuv1 = np.vstack([cphaseu1,cphasev1]).T
     cphaseuv2 = np.vstack([cphaseu2,cphasev2]).T
     cphaseuv3 = np.vstack([cphaseu3,cphasev3]).T
+    return cphaseuv1, cphaseuv2, cphaseuv3
+
+def cphase_uvdists(cphase_data):
+    cphaseu1 = cphase_data['u1']
+    cphaseu2 = cphase_data['u2']
+    cphaseu3 = cphase_data['u3']
+    cphasev1 = cphase_data['v1']
+    cphasev2 = cphase_data['v2']
+    cphasev3 = cphase_data['v3']
+    cphased1 = np.sqrt(cphaseu1**2+cphasev1**2)
+    cphased2 = np.sqrt(cphaseu2**2+cphasev2**2)
+    cphased3 = np.sqrt(cphaseu3**2+cphasev3**2)
     return cphaseuv1, cphaseuv2, cphaseuv3
 
 def logcamp_uvpairs(logcamp_data):
@@ -120,6 +136,21 @@ def logcamp_uvpairs(logcamp_data):
     campuv3 = np.vstack([campu3,campv3]).T
     campuv4 = np.vstack([campu4,campv4]).T
     return campuv1, campuv2, campuv3, campuv4
+
+def logcamp_uvdists(logcamp_data):
+    campu1 = logcamp_data['u1']
+    campu2 = logcamp_data['u2']
+    campu3 = logcamp_data['u3']
+    campu4 = logcamp_data['u4']
+    campv1 = logcamp_data['v1']
+    campv2 = logcamp_data['v2']
+    campv3 = logcamp_data['v3']
+    campv4 = logcamp_data['v4']
+    campd1 = np.sqrt(campu1**2+campv1**2)
+    campd2 = np.sqrt(campu2**2+campv2**2)
+    campd3 = np.sqrt(campu3**2+campv3**2)
+    campd4 = np.sqrt(campu4**2+campv4**2)
+    return campd1, campd2, campd3, campd4
 
 def get_camp_amp_sigma(obs, logcamp_data):
     data = obs.data

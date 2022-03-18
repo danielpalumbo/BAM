@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import random
 import dill as pkl
 from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix, rescale_veclist
-from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, logcamp_uvpairs, get_camp_amp_sigma, get_cphase_vis_sigma
+from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, cphase_uvdists, logcamp_uvpairs, logcamp_uvdists, get_camp_amp_sigma, get_cphase_vis_sigma, var_sys
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
 from dynesty import plotting as dyplot
@@ -29,7 +29,7 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., f=0., e=0., polflux=True, source='', periodic=False, adap_fac =1):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1):
         self.periodic=periodic
         self.dynamic=False
         self.source = source
@@ -56,6 +56,10 @@ class KerrBam:
         self.spec = spec
         self.f = f
         self.e = e
+        self.var_a = var_a
+        self.var_b = var_b
+        self.var_c = var_c
+        self.var_u0 = var_u0
         self.nmax = nmax
         self.zbl = zbl
         if self.nmax == 0 and adap_fac != 1:
@@ -79,9 +83,10 @@ class KerrBam:
             mode = 'fixed' 
         self.mode = mode
 
-        self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, f, e]+jargs
-        self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','f','e']+jarg_names
-        self.imparam_names = [i for i in self.all_names if i not in ['f','e']]
+        self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, f, e, var_a, var_b, var_c, var_u0]+jargs
+        self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','f','e','var_a','var_b','var_c','var_u0']+jarg_names
+        self.imparam_names = [i for i in self.all_names if i not in ['f','e','var_a','var_b','var_c','var_u0']+jarg_names]
+        self.imparam_names = self.imparam_names + ['jargs']
         self.all_param_dict = dict()
         for i in range(len(self.all_names)):
             self.all_param_dict[self.all_names[i]] = self.all_params[i]
@@ -92,7 +97,7 @@ class KerrBam:
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
         self.modeled_param_dict = dict()
         for i in range(len(self.modeled_names)):
-            self.modeled_param_dict[modeled_names[i]]=self.modeled_params[i]
+            self.modeled_param_dict[self.modeled_names[i]]=self.modeled_params[i]
 
         self.periodic_names = []
         self.periodic_indices=[]
@@ -147,6 +152,7 @@ class KerrBam:
         Given a list of values of modeled parameters in imparams,
         compute the resulting qvec, uvec, ivec, rotimxvec, and rotimyvec.
         """
+        # print(imparams)
         MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, jargs = imparams
 
         
@@ -223,6 +229,11 @@ class KerrBam:
                 to_eval[name] = self.all_param_dict[name]
             else:
                 to_eval[name] = infi[self.modeled_names.index(name)]
+        jargs = []
+        for jn in self.jarg_names:
+            jargs.append(to_eval[jn])
+            del to_eval[jn]
+        to_eval['jargs'] = jargs
         return to_eval
     
 
@@ -237,7 +248,7 @@ class KerrBam:
         if 'vis' in data_types:
             vis = obs.data['vis']
             sigma = obs.data['sigma']
-            amp = obs.unpack('amp')['amp']
+            amp = obs.unpack('amp',debias=debias)['amp']
             u = obs.data['u']
             v = obs.data['v']
             visuv = np.vstack([u,v]).T
@@ -296,6 +307,7 @@ class KerrBam:
             if self.error_modeling:
                 print("Back-fetching quadrangle ampltudes and sigmas.")
                 n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err = get_camp_amp_sigma(obs, logcamp_data)
+                campd1, campd2, campd3, campd4 = logcamp_uvdists(logcamp_data)
                 print("Done!")
             Ncamp = len(logcamp)
         if 'cphase' in data_types:
@@ -307,13 +319,14 @@ class KerrBam:
             if self.error_modeling:
                 print("Back-fetching triangle amplitudes and sigmas.")
                 v1, v2, v3, v1err, v2err, v3err = get_cphase_vis_sigma(obs, cphase_data)
+                cphased1, cphased2, cphased3 = cphase_uvdists(cphase_data)
                 v1err = np.abs(v1err)
                 v2err = np.abs(v2err)
                 v3err = np.abs(v3err)
                 print("Done!")
             Ncphase = len(cphase)
         def loglike(params):
-            to_eval = build_eval(params)
+            to_eval = self.build_eval(params)
 
             imparams = [to_eval[ipn] for ipn in self.imparam_names]
             ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)
@@ -327,7 +340,7 @@ class KerrBam:
             self.modelim.qvec = qvec
             self.modelim.uvec = uvec
             self.modelim_vvec = vvec
-            self.modelim.pa = to_eval[self.all_names.index('PA')]
+            self.modelim.pa = to_eval['PA']
             if 'vis' in data_types or 'qvis' in data_types or 'uvis' in data_types or 'vvis' in data_types or 'mvis' in data_types:
                 model_ivis, model_qvis, model_uvis, model_vvis = self.modelim_allvis(visuv, ttype=ttype)
                 if 'mvis' in data_types:
@@ -371,10 +384,8 @@ class KerrBam:
                 out+=ln_norm
             if 'logcamp' in data_types:
                 model_logcamp = self.modelim_logcamp(campuv1, campuv2, campuv3, campuv4, ttype=ttype)
-                # model_logcamp = self.logcamp(ivec, rotimxvec, rotimyvec, campu1, campu2, campu3, campu4, campv1, campv2, campv3, campv4)
-                # logcamplike = -1./Ncamp * np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
                 if self.error_modeling:
-                    _, new_logcamp_err = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, fractional=to_eval['f'], additive = to_eval['e'], debias=debias)
+                    _, new_logcamp_err = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, campd1, campd2, campd3, campd4, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], debias=debias)
                     logcamplike = -0.5*np.sum((logcamp-model_logcamp)**2/new_logcamp_err**2)
                     ln_norm = logcamplike-np.sum(np.log((2.0*np.pi)**0.5 * new_logcamp_err)) 
                 else:
@@ -384,7 +395,7 @@ class KerrBam:
             if 'cphase' in data_types:
                 model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
                 if self.error_modeling:
-                    _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval['f'], additive=to_eval['e'])
+                    _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, fractional=to_eval['f'], additive=to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'])
                     cphaselike = -np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err**2)
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(new_cphase_err)**2))) 
                 else:
@@ -397,7 +408,7 @@ class KerrBam:
         return loglike
 
     def KerrBAM_from_eval(self, to_eval):
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, [to_eval[jn] for jn in self.jarg_names], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
         return new
 
     def annealing_MAP(self, obs, data_types=['vis'], ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True):
@@ -413,7 +424,7 @@ class KerrBam:
         res =  dual_annealing(lambda x: -ll(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)
         print("Done!")
 
-        to_eval = build_eval(res.x)
+        to_eval = self.build_eval(res.x)
         new = KerrBAM_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
@@ -510,7 +521,7 @@ class KerrBam:
 
     def MOP_Bam(self):
         mean, cov = self.mean_and_cov()
-        to_eval = build_eval(mean)
+        to_eval = self.build_eval(mean)
         new = KerrBAM_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
@@ -525,7 +536,7 @@ class KerrBam:
         if samples is None:
             samples = self.resample_equal()
         sample = samples[random.randint(0,len(samples)-1)]
-        to_eval = build_eval(sample)
+        to_eval = self.build_eval(sample)
         new = KerrBAM_from_eval(sample)
         new.modelim = new.make_image(modelim=True)
         return new
@@ -617,7 +628,7 @@ class KerrBam:
         u = obs.data['u']
         v = obs.data['v']
         sigma = obs.data['sigma']  
-        amp = obs.unpack('amp')['amp']
+        # amp = obs.unpack('amp')['amp']
         vis = obs.data['vis']
         sd = np.sqrt(sigma**2.0)# + (self.f*amp)**2.0 + self.e**2.0)
 
@@ -647,13 +658,18 @@ class KerrBam:
         amp_chisq = np.sum((absdelta/sd)**2)/(len(amp))
         return amp_chisq
 
+    def eval_var_sys(self, u):
+        return var_sys(self.var_a,self.var_b, self.var_c, self.var_u0, u)
 
     def all_chisqs(self, obs, debias=True):
         if self.mode !='fixed':
             print("Can only compute chisqs to fixed model!")
             return
-        chisq_obs = obs.add_fractional_noise(self.f)
-        chisq_obs.data['sigma'] = (chisq_obs.data['sigma']**2+(self.e)**2)**0.5
+        # chisq_obs = obs.add_fractional_noise(self.f)
+        chisq_obs = obs.copy()
+        obsdata = chisq_obs.unpack(['amp','uvdist'],conj=False,debias=debias)
+        print("If you have specified any systematic error, it is being included in the chisq calculations.")
+        chisq_obs.data['sigma'] = (chisq_obs.data['sigma']**2+(obsdata['amp']*self.f)**2+(self.e)**2 + self.eval_var_sys(obsdata['uvdist']))**0.5
 
         logcamp_chisq = self.logcamp_chisq(chisq_obs, debias=debias)
         cphase_chisq = self.cphase_chisq(chisq_obs)

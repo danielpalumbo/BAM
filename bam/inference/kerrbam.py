@@ -676,7 +676,7 @@ class KerrBam:
         sigma = obs.data['sigma']  
         amp = obs.unpack('amp')['amp']
         vis = obs.data['vis']
-        sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
+        sd = np.sqrt(sigma**2.0)# + (self.f*amp)**2.0 + self.e**2.0)
 
         uv = np.vstack([u,v]).T
         model_vis = self.modelim_ivis(uv)
@@ -696,7 +696,7 @@ class KerrBam:
         sigma = obs.data['sigma']  
         amp = obs.unpack('amp',debias=debias)['amp']
         # vis = obs.data['vis']
-        sd = np.sqrt(sigma**2.0 + (self.f*amp)**2.0 + self.e**2.0)
+        sd = np.sqrt(sigma**2.0)# + (self.f*amp)**2.0 + self.e**2.0)
         uv = np.vstack([u,v]).T
         model_amp = np.abs(self.modelim_ivis(uv))
         # model_amp = np.abs(self.vis_fixed(u,v))
@@ -709,9 +709,12 @@ class KerrBam:
         if self.mode !='fixed':
             print("Can only compute chisqs to fixed model!")
             return
-        logcamp_chisq = self.logcamp_chisq(obs, debias=debias)
-        cphase_chisq = self.cphase_chisq(obs)
-        amp_chisq = self.amp_chisq(obs, debias=debias)
-        vis_chisq = self.vis_chisq(obs)
+        chisq_obs = obs.add_fractional_noise(self.f)
+        chisq_obs.data['sigma'] = (chisq_obs.data['sigma']**2+(self.e)**2)**0.5
+
+        logcamp_chisq = self.logcamp_chisq(chisq_obs, debias=debias)
+        cphase_chisq = self.cphase_chisq(chisq_obs)
+        amp_chisq = self.amp_chisq(chisq_obs, debias=debias)
+        vis_chisq = self.vis_chisq(chisq_obs)
         return {'logcamp':logcamp_chisq,'cphase':cphase_chisq,'vis':vis_chisq,'amp':amp_chisq}
 

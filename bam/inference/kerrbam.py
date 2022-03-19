@@ -432,7 +432,7 @@ class KerrBam:
         print("Built combined likelihood function!")
         return loglike
 
-    def KerrBAM_from_eval(self, to_eval):
+    def KerrBam_from_eval(self, to_eval):
         new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
         return new
 
@@ -450,7 +450,7 @@ class KerrBam:
         print("Done!")
 
         to_eval = self.build_eval(res.x)
-        new = KerrBAM_from_eval(to_eval)
+        new = self.KerrBam_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
         
@@ -547,7 +547,7 @@ class KerrBam:
     def MOP_Bam(self):
         mean, cov = self.mean_and_cov()
         to_eval = self.build_eval(mean)
-        new = KerrBAM_from_eval(to_eval)
+        new = self.KerrBam_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
 
@@ -562,7 +562,7 @@ class KerrBam:
             samples = self.resample_equal()
         sample = samples[random.randint(0,len(samples)-1)]
         to_eval = self.build_eval(sample)
-        new = KerrBAM_from_eval(sample)
+        new = self.KerrBam_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
 

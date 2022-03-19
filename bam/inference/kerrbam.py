@@ -93,7 +93,7 @@ class KerrBam:
 
         self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
         self.modeled_names = [self.all_names[i] for i in self.modeled_indices]
-        self.error_modeling = 'f' in self.modeled_names or 'e' in self.modeled_names
+        self.error_modeling = np.any(np.array([i in self.modeled_names for i in ['f','e','var_a','var_b','var_c','var_u0']]))
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
         self.modeled_param_dict = dict()
         for i in range(len(self.modeled_names)):
@@ -243,14 +243,16 @@ class KerrBam:
         return a likelihood function that accounts for each contribution. 
         """
 
-        
+        u = obs.data['u']
+        v = obs.data['v']
+        uvdists = np.sqrt(u**2+v**2)
         
         if 'vis' in data_types:
             vis = obs.data['vis']
             sigma = obs.data['sigma']
             amp = obs.unpack('amp',debias=debias)['amp']
-            u = obs.data['u']
-            v = obs.data['v']
+            # u = obs.data['u']
+            # v = obs.data['v']
             visuv = np.vstack([u,v]).T
             Nvis = len(vis)
             print("Building vis likelihood!")
@@ -258,24 +260,24 @@ class KerrBam:
             qvis = obs.data['qvis']
             qsigma = obs.data['qsigma']
             qamp = np.abs(qvis)
-            u = obs.data['u']
-            v = obs.data['v']
+            # u = obs.data['u']
+            # v = obs.data['v']
             visuv = np.vstack([u,v]).T
             Nqvis = len(qvis)
         if 'uvis' in data_types:
             uvis = obs.data['uvis']
             usigma = obs.data['usigma']
             uamp = np.abs(uvis)
-            u = obs.data['u']
-            v = obs.data['v']
+            # u = obs.data['u']
+            # v = obs.data['v']
             visuv = np.vstack([u,v]).T
             Nuvis = len(uvis)
         if 'vvis' in data_types:
             vvis = obs.data['vvis']
             vsigma = obs.data['vsigma']
             vamp = np.abs(vvis)
-            u = obs.data['u']
-            v = obs.data['v']
+            # u = obs.data['u']
+            # v = obs.data['v']
             visuv = np.vstack([u,v]).T
             Nvvis = len(vvis)
         if 'mvis' in data_types:
@@ -286,15 +288,14 @@ class KerrBam:
             sigma = obs.data['sigma']
             mvis = pvis/vis
             msigma = sigma * np.sqrt(2/np.abs(vis)**2 + np.abs(pvis)**2 / np.abs(vis)**4)
-            u = obs.data['u']
-            v = obs.data['v']
+            # u = obs.data['u']
+            # v = obs.data['v']
             visuv = np.vstack([u,v]).T
             Nmvis = len(mvis)
         if 'amp' in data_types:
             sigma = obs.data['sigma']
             amp = obs.unpack('amp', debias=debias)['amp']
-            u = obs.data['u']
-            v = obs.data['v']
+            
             ampuv = np.vstack([u,v]).T
             Namp = len(amp)
             print("Building amp likelihood!")
@@ -348,34 +349,58 @@ class KerrBam:
                 
 
             if 'vis' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
+                if self.error_modeling:
+                    _, sd = amp_add_syserr(amp, sigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
+                else:
+                    sd = sigma
+                # sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 # model_vis = self.modelim_ivis(visuv, ttype=ttype)
                 vislike = -0.5 * np.sum(np.abs(model_ivis-vis)**2 / sd**2)
                 ln_norm = vislike-2*np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'qvis' in data_types:
-                sd = sqrt(qsigma**2.0 +(to_eval['f']*qamp)**2.0+to_eval['e']**2.0)
+                if self.error_modeling:
+                    _, sd = amp_add_syserr(qamp, qsigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
+                else:
+                    sd = qsigma
+                # sd = sqrt(qsigma**2.0 +(to_eval['f']*qamp)**2.0+to_eval['e']**2.0)
                 qvislike = -0.5 * np.sum(np.abs(model_qvis-qvis)**2.0/sd**2)
                 ln_norm = qvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'uvis' in data_types:
-                sd = sqrt(usigma**2.0 +(to_eval['f']*uamp)**2.0+to_eval['e']**2.0)
+                if self.error_modeling:
+                    _, sd = amp_add_syserr(uamp, usigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
+                else:
+                    sd = usigma
+                # sd = sqrt(usigma**2.0 +(to_eval['f']*uamp)**2.0+to_eval['e']**2.0)
                 uvislike = -0.5 * np.sum(np.abs(model_uvis-uvis)**2.0/sd**2)
                 ln_norm = uvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'vvis' in data_types:
-                sd = sqrt(vsigma**2.0 +(to_eval['f']*vamp)**2.0+to_eval['e']**2.0)
+                if self.error_modeling:
+                    _, sd = amp_add_syserr(vamp, vsigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
+                else:
+                    sd = vsigma
+                # sd = sqrt(vsigma**2.0 +(to_eval['f']*vamp)**2.0+to_eval['e']**2.0)
                 vvislike = -0.5 * np.sum(np.abs(model_vvis-vvis)**2.0/sd**2)
                 ln_norm = vvislike-2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out += ln_norm
             if 'mvis' in data_types:
-                sd = sqrt(msigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
+                if self.error_modeling:
+                    _, sd = amp_add_syserr(amp, msigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
+                else:
+                    sd = msigma
+                # sd = sqrt(msigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 #sd = vsigma*sd/sigma
                 mvislike = -0.5 * np.sum(np.abs(model_mvis-mvis)**2.0/sd**2)
                 ln_norm = mvislike -2*np.sum(np.log((2.0*np.pi)**0.5*sd))
                 out+=ln_norm
             if 'amp' in data_types:
-                sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
+                if self.error_modeling:
+                    _, sd = amp_add_syserr(amp, sigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
+                else:
+                    sd = sigma
+                # sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 model_amp = np.abs(self.modelim_ivis(ampuv, ttype=ttype))
                 # model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
                 # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)

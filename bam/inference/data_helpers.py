@@ -120,7 +120,7 @@ def cphase_uvdists(cphase_data):
     cphased1 = np.sqrt(cphaseu1**2+cphasev1**2)
     cphased2 = np.sqrt(cphaseu2**2+cphasev2**2)
     cphased3 = np.sqrt(cphaseu3**2+cphasev3**2)
-    return cphaseuv1, cphaseuv2, cphaseuv3
+    return cphased1, cphased2, cphased3
 
 def logcamp_uvpairs(logcamp_data):
     campu1 = logcamp_data['u1']

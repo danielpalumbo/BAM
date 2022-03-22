@@ -55,7 +55,7 @@ eta_to_fit = eta
 PA_to_fit = PA#288/180*np.pi
 zbl_to_fit = zbl#im.total_flux()
 iota_to_fit = iota#[np.pi/4,np.pi/2]
-truths = [a]
+# truths = [a]
 nmax_to_fit = nmax
 # jargs_to_fit = jargs
 # M_to_fit=M
@@ -84,8 +84,8 @@ outname = 'selffita0.5_truen'+str(nmax)+'_fitn'+str(nmax_to_fit)+'_'+'_'.join(dt
 outname+='_frac'+str(frac)+'_sig'+str(sig)
 
 modelb.traceplot(save=outname+'_trace.png', show=False)
-truths = [a]#[M,a] + [2]
-modelb.cornerplot(save=outname+'_corner.png', show=False,truths=truths)
+# truths = [a]#[M,a] + [2]
+modelb.cornerplot(save=outname+'_corner.png', show=False)#,truths=truths)
 #display the Mean of Posterior
 MOP_Bam = modelb.MOP_Bam()
 MOP_Bam.make_rotated_image().display(export_pdf=outname+'_MOP.png')

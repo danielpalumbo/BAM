@@ -23,6 +23,8 @@ def get_uniform_transform(lower, upper):
     return lambda x: (upper-lower)*x + lower
 
 
+NOISE_DEFAULT_DICT = {'f':0,'e':0,'var_a':0,'var_b':0,'var_c':0,'var_u0':4e9}
+
 class KerrBam:
     '''The Bam class is a collection of accretion flow and black hole parameters.
     jfunc: a callable that takes (r, phi, jargs)
@@ -82,10 +84,10 @@ class KerrBam:
         else:
             mode = 'fixed' 
         self.mode = mode
-
+        self.noise_param_names = ['f','e','var_a','var_b','var_c','var_u0']
         self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, f, e, var_a, var_b, var_c, var_u0]+jargs
         self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','f','e','var_a','var_b','var_c','var_u0']+jarg_names
-        self.imparam_names = [i for i in self.all_names if i not in ['f','e','var_a','var_b','var_c','var_u0']+jarg_names]
+        self.imparam_names = [i for i in self.all_names if i not in self.noise_param_names+jarg_names]
         self.imparam_names = self.imparam_names + ['jargs']
         self.all_param_dict = dict()
         for i in range(len(self.all_names)):
@@ -220,6 +222,10 @@ class KerrBam:
         phase31 = np.angle(vis31)
         cphase_model = phase12+phase23+phase31
         return cphase_model
+
+    def pad_imparams(self, imparams, noiseparams):
+        infi = imparams[:-1] + noiseparams+imparams[-1:]
+        return infi
 
     def build_eval(self, indexable_fitparams):
         infi = indexable_fitparams

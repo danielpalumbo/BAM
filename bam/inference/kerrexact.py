@@ -83,10 +83,12 @@ def getlorentzboost(boost, chi):
 # def kerr_exact_interpgrid(rho, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, interpgrid_x, interpgrid_y):
 
 
-def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota, compute_V=False):
+def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota, compute_V=False, axisymmetric=False):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
+    if np.isclose(a,0):
+        a = 1e-6
 
     zeros = np.zeros_like(rho)
     npix = len(zeros)
@@ -262,11 +264,116 @@ def raytrace_single_n(rho, varphi, inc, a, n, boost, chi, fluid_eta, iota, compu
     
     return rvec, ivec, qvec, uvec, vvec, redshift
 
+def emissivity_model(r, phi, a, lam, eta, signpr, boost, chi, fluid_eta, iota, compute_V=False):
+    pass
+    bigR = R(r, a, lam, eta)
+    bigDelta = Delta(r, a)
+    bigXi = Xi(r, a, np.pi/2)
+    littleomega = omega(r, a, np.pi/2)
 
-def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1, compute_V=False):
+    #lowered
+    pt_low = -1*np.ones_like(r)
+    pr_low = signpr * np.sqrt(bigR)/bigDelta
+    pr_low[pr_low>10] = 10
+    pr_low[pr_low<-10] = -10
+    # print(np.sum(np.isnan(pr_low)))
+    pphi_low = lam
+    ptheta_low = signptheta*np.sqrt(eta)
+    plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
+
+    #raised
+    pt = 1/r**2 * (-a*(a-lam) + (r**2+a**2) * (r**2 + a**2 -a * lam) / bigDelta)
+    pr = signpr * 1/r**2 * np.sqrt(bigR)
+    pphi = 1/r**2 * (-(a-lam)+a/Delta(r,a)*(r**2+a**2 - a*lam))
+    ptheta = signptheta*np.sqrt(eta) / r**2
+    # praised.append([pt_up, pr_up, pphi_up, ptheta_up])
+    #now everything to generate polarization
+    
+    emutetrad = np.array([[1/r*np.sqrt(bigXi/bigDelta), zeros, zeros, littleomega/r*np.sqrt(bigXi/bigDelta)], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
+    emutetrad = np.transpose(emutetrad,(2,0,1))
+    boostmatrix = getlorentzboost(-boost, chi)
+    #fluid frame tetrad
+    coordtransform = np.matmul(np.matmul(minkmetric, boostmatrix), emutetrad)
+    coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
+    rs = r
+    pupperfluid = np.matmul(coordtransform, plowers)
+    redshift = 1 / (pupperfluid[:,0,0])
+    lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
+    
+    #fluid frame polarization
+    pspatialfluid = pupperfluid[:,1:]
+    fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
+    fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
+    fupperfluid = np.swapaxes(fupperfluid, 1,2)
+    if compute_V:
+        vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
+    else:
+        vvec = zeros
+    #apply the tetrad to get kerr f
+    kfuppers = np.matmul(coordtransforminv, fupperfluid)
+    kft = kfuppers[:,0,0]
+    kfr = kfuppers[:,1,0]
+    kftheta = kfuppers[:,2,0]
+    kfphi = kfuppers[:, 3,0]
+    spin = a
+    #kappa1 and kappa2
+    AA = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
+    BB = (rs**2 + spin**2) * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
+    kappa1 = rs * AA
+    kappa2 = -rs * BB
+    # kappa1 = np.clip(np.real(kappa1), -20, 20)
+    
+    #screen appearance
+    nu = -(alpha + spin * np.sin(inc))
+
+    norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)
+    ealpha = (beta * kappa2 - nu * kappa1) / norm
+    ebeta = (beta * kappa1 + nu * kappa2) / norm
+
+    qvec = -(ealpha**2 - ebeta**2)
+    uvec = -2*ealpha*ebeta
+    
+    qvec *= lp
+    uvec *= lp
+    # ivec = np.sqrt(qvec**2+uvec**2)
+    # rpmask = np.abs(r-rp) < 0.01*rp
+    # ivec[rpmask]=0.
+    # qvec[rpmask]=0.
+    # uvec[rpmask]=0.
+    # vvec[rpmask]=0.
+    # ivec = np.real(np.nan_to_num(ivec))
+    qvec = np.real(np.nan_to_num(qvec))
+    uvec = np.real(np.nan_to_num(uvec))
+    if compute_V:
+        vvec = np.real(np.nan_to_num(vvec))
+    redshift = np.real(np.nan_to_num(redshift))
+    # if adap_fac > 1 and nmax>0:
+    #     rvec = rescale(rvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+    #     # ivec = rescale(ivec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+    #     qvec = rescale(qvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+    #     uvec = rescale(uvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+        
+    #     if compute_V:
+    #         vvec = rescale(vvec.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+    #     else:
+    #         vvec = np.zeros(adap_fac**2*xdim**2)
+    #     redshift = rescale(redshift.reshape((xdim,xdim)),adap_fac,order=1).flatten()
+    ivec = np.sqrt(qvec**2+uvec**2)
+
+def ray_trace(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True):
+    pass
+
+
+
+#want to disentangle ray-tracing quantities (mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac, axisymmetric)
+#from fluid properties (boost, chi, fluid_eta, iota)
+
+def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1, compute_V=False, axisymmetric=True):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
+    if np.isclose(a,0):
+        a = 1e-6
 
     rho = mudists/MoDuas
     zeros = np.zeros_like(rho)
@@ -281,6 +388,29 @@ def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid
     up, um = get_up_um(lam, eta, a)
     urat = up/um
     r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
+    rr1 = np.real(r1)
+    rr2 = np.real(r2)
+    rr3 = np.real(r3)
+    rr4 = np.real(r4)
+    ir1 = np.imag(r1)
+    ir2 = np.imag(r2)
+    ir3 = np.imag(r3)
+    ir4 = np.imag(r4)
+    ir1_0 = np.isclose(ir1,0)
+    ir2_0 = np.isclose(ir2,0)
+    ir3_0 = np.isclose(ir3,0)
+    ir4_0 = np.isclose(ir4,0)
+    c12 = (np.isclose(np.imag(r1),-np.imag(r2)))
+    c34 = (np.isclose(np.imag(r3),-np.imag(r4)))
+
+    allreal = ir1_0 * ir2_0 * ir3_0 * ir4_0
+
+    case1 = allreal * (rr2<rp)*(rr3>rp)
+    case2 = allreal * (rr4<rp)
+    case3 = ir1_0 * ir2_0 * ~ir3_0 * ~ir3_0 * c34 * (rr2<rp)
+    case4 = ~ir1_0 * ~ir2_0 * ~ir3_0 * ~ir4_0 * c12 * c34
+
+
     crit_mask = np.abs(np.imag(r3))>1e-10
     cr1 = np.real(r1)[crit_mask]
     cr2 = np.real(r2)[crit_mask]
@@ -391,6 +521,9 @@ def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid
             bigDelta = Delta(r, a)
             bigXi = Xi(r, a, np.pi/2)
             littleomega = omega(r, a, np.pi/2)
+
+
+
 
             #lowered
             pt_low = -1*np.ones_like(r)

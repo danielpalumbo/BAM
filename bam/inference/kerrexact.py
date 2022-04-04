@@ -191,12 +191,14 @@ def emissivity_model(rvecs, phivecs, signprs, lams, etas, a, boost, chi, fluid_e
 
 #these should return r, phi, tau, tau_tot
 
-def ray_trace_by_case(a, alpha, beta, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, nmin=0):
+def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, nmin=0):
     """
-    Case 1: r1, r2, r3, r4 are real.
-    Returns 
+    Case 1: r1, r2, r3, r4 are real, r2<rp<r3.
+    Case 2: r1, r2, r3, r4 are real and less than rp.
+    Case 3: r1, r2 real, r3, r4 complex and conjugate.
+    Case 4: All complex, r1,r2 conjugate and r3,r4 conjugate.
     """
-    if len(alpha) == 0:
+    if len(sb) == 0:
         return [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)]
     r31 = r3-r1
     r32 = r3-r2
@@ -204,12 +206,15 @@ def ray_trace_by_case(a, alpha, beta, lam, eta, r1, r2, r3, r4, up, um, inc, nma
     r41 = r4-r1
     k = (r32*r41 / (r31*r42))
     urat = up/um
-    m = np.sign(beta) + nmin 
+    Kurat = ellipk(urat)
+    m = sb + nmin 
     m[m>0] = 0
     rvecs = []
     phivecs = []
     Irmasks = []
     signprs = []
+
+    # sb = np.sign(beta)
     if case == 1:
         Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
         Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
@@ -218,33 +223,67 @@ def ray_trace_by_case(a, alpha, beta, lam, eta, r1, r2, r3, r4, up, um, inc, nma
         Ir_turn = np.real(2/np.sqrt(r31*r42)*fobs)
         Ir_total = 2*Ir_turn
 
-        # signpr = np.ones_like(rho)
-
-
-
-        # redshifts = []
 
         for n in range(nmin, nmax+1):
             m += 1
-            Ir = 1/np.sqrt(-um*a**2)*(2*m*ellipk(urat) - np.sign(beta)*Fobs)
+            Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             Irmask = Ir<Ir_total
             signpr = np.sign(Ir_turn-Ir)
-            signptheta = (-1)**m * np.sign(beta)
             ffac = 1 / 2 * np.real(r31 * r42)**(1/2)
             # snnum = np.ones_like(rho)
-            snnum = ellipj(((ffac*Ir)-fobs), k)[0]
+            snnum = ellipj(((ffac*Ir)-signpr*fobs), k)[0]
             snsqr = snnum**2
             # snsqr[eta_mask] = np.nan
             snsqr[np.abs(snsqr)>1.1]=np.nan
             
             r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
+
+            print(r)
+            rtest = np.real((r2*r31 - r1*r32*snsqr)/(r31-r32*snsqr))
+            print(rtest)
+
             # rvecs.append(r)
             # r[eta_mask] =np.nan
             r[~Irmask] = np.nan
             rvec = np.nan_to_num(r)
             Irmasks.append(Irmask)
+            signprs.append(signpr)
+            rvecs.append(rvec)
             if not axisymmetric:
                 pass
+
+    if case ==2:
+        x2rp = np.sqrt((r31*(rp-r4))/(r41*(rp-r3)))
+        x2rm = np.sqrt((r31*(rm-r4))/(r41*(rm-r3)))
+        x2ro = np.sqrt(r31/r41)
+        auxarg = np.arcsin(x2ro)
+        r3142sqrt = np.sqrt(r31*r42)
+        # Ir_o = 2*ellipkinc(auxarg, k)/r3142sqrt
+
+        Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
+        Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
+        # fobs = ellipkinc(np.arcsin(np.sqrt(r31/r41)), k)
+        pref = 2/r3142sqrt
+        I2rp = pref*ellipkinc(np.arcsin(x2rp),k)
+        I2ro = pref*ellipkinc(np.arcsin(x2ro),k)#this is the previous fobs
+        Ir_total = I2ro-I2rp      
+
+        for n in range(nmin, nmax+1):
+            m+= 1
+            Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
+            Irmask = Ir<Ir_total
+            X2 = 1/2*r3142sqrt *(-Ir +signpr*I2ro)
+            snnum = ellipj(X2,k)[0]
+            snsqr = snnum**2
+            rs =(r4*r31 - r3*r41*snsqr)/(r31-r41*snsqr)
+            r[~Irmask] = np.nan
+            rvec = np.nan_to_num(r)
+            rvecs.append(rvec)
+            signprs.append(signpr)
+            Irmasks.append(Irmask)
+            if not axisymmetric:
+                pass
+
 
     if case == 3:
         Agl = np.real(np.sqrt(r32*r42))
@@ -262,12 +301,12 @@ def ray_trace_by_case(a, alpha, beta, lam, eta, r1, r2, r3, r4, up, um, inc, nma
         signpr = np.ones_like(r31)
         for n in range(nmin, nmax+1):
             m += 1
-            Ir = 1/np.sqrt(-um*a**2)*(2*m*ellipk(urat) - np.sign(beta)*Fobs)
+            Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             Irmask = Ir<Ir_total
 
             X3 = np.sqrt(Agl*Bgl)*(Ir - signpr * I3r)
             cnnum = ellipj(X3, k3)[1]
-            signptheta = (-1)**m * np.sign(beta)
+            signptheta = (-1)**m * sb
             ffac = 1 / 2 * np.real(r31 * r42)**(1/2)
 
             r = ((Bgl*r2 - Agl*r1) + (Bgl*r2+Agl*r1)*cnnum) / ((Bgl-Agl)+(Bgl+Agl)*cnnum)
@@ -279,8 +318,7 @@ def ray_trace_by_case(a, alpha, beta, lam, eta, r1, r2, r3, r4, up, um, inc, nma
             Irmasks.append(Irmask)
             if not axisymmetric:
                 pass
-    if case ==2:
-        pass
+
     if case ==4:
         pass
     return rvecs, phivecs, Irmask, signprs
@@ -294,6 +332,7 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     npix = len(zeros)
     xdim = int(np.sqrt(npix))
     rp = 1+np.sqrt(1-a**2)
+    rm = 1-np.sqrt(1-a**2)
     alpha = rho*np.cos(varphi)
     beta = rho*np.sin(varphi)
     lam, eta = get_lam_eta(alpha,beta, inc, a)
@@ -322,10 +361,19 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     case3 = ir1_0 * ir2_0 * ~ir3_0 * ~ir3_0 * c34 * (rr2<rp)
     case4 = ~ir1_0 * ~ir2_0 * ~ir3_0 * ~ir4_0 * c12 * c34
 
-    rvecs1, phivecs1, Irmasks1, signprs1 = ray_trace_by_case(a,alpha[case1],beta[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
-    rvecs2, phivecs2, Irmasks2, signprs2 = ray_trace_by_case(a,alpha[case2],beta[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
-    rvecs3, phivecs3, Irmasks3, signprs3 = ray_trace_by_case(a,alpha[case3],beta[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
-    rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,alpha[case4],beta[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
+    all_signpthetas = [np.ones_like(rho)]
+    sb = np.sign(beta)
+    m = sb + nmin 
+    m[m>0] = 0
+    for ni in range(len(ns)):
+        m+=1
+        all_signpthetas[ni] = (-1)**m*sb
+
+
+    rvecs1, phivecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
+    rvecs2, phivecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
+    rvecs3, phivecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3].lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
+    rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,rm,rp,sb[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
 
     #stitch together cases
     all_rvecs = []

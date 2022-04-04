@@ -213,66 +213,67 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     phivecs = []
     Irmasks = []
     signprs = []
+    Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
+    Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
+
 
     # sb = np.sign(beta)
     if case == 1:
-        Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
-        Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
-        fobs = ellipkinc(np.arcsin(np.sqrt(r31/r41)), k)
-        #note: only outside the critical curve, since nothing inside has a turning point
-        Ir_turn = np.real(2/np.sqrt(r31*r42)*fobs)
+        r3142sqrt = np.sqrt(r31*r42)
+        x2ro = np.sqrt(r31/r41)
+        I2ro = 2/r3142sqrt * ellipkinc(np.arcsin(x1ro),k)
+        Ir_turn = I1ro
         Ir_total = 2*Ir_turn
 
-
-        for n in range(nmin, nmax+1):
-            m += 1
-            Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
-            Irmask = Ir<Ir_total
-            signpr = np.sign(Ir_turn-Ir)
-            ffac = 1 / 2 * np.real(r31 * r42)**(1/2)
-            # snnum = np.ones_like(rho)
-            snnum = ellipj(((ffac*Ir)-signpr*fobs), k)[0]
-            snsqr = snnum**2
-            # snsqr[eta_mask] = np.nan
-            snsqr[np.abs(snsqr)>1.1]=np.nan
-            
-            r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
-
-            print(r)
-            rtest = np.real((r2*r31 - r1*r32*snsqr)/(r31-r32*snsqr))
-            print(rtest)
-
-            # rvecs.append(r)
-            # r[eta_mask] =np.nan
-            r[~Irmask] = np.nan
-            rvec = np.nan_to_num(r)
-            Irmasks.append(Irmask)
-            signprs.append(signpr)
-            rvecs.append(rvec)
-            if not axisymmetric:
-                pass
-
-    if case ==2:
-        x2rp = np.sqrt((r31*(rp-r4))/(r41*(rp-r3)))
-        x2rm = np.sqrt((r31*(rm-r4))/(r41*(rm-r3)))
-        x2ro = np.sqrt(r31/r41)
-        auxarg = np.arcsin(x2ro)
-        r3142sqrt = np.sqrt(r31*r42)
-        # Ir_o = 2*ellipkinc(auxarg, k)/r3142sqrt
-
-        Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
-        Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
         # fobs = ellipkinc(np.arcsin(np.sqrt(r31/r41)), k)
-        pref = 2/r3142sqrt
-        I2rp = pref*ellipkinc(np.arcsin(x2rp),k)
-        I2ro = pref*ellipkinc(np.arcsin(x2ro),k)#this is the previous fobs
+        # #note: only outside the critical curve, since nothing inside has a turning point
+        # Ir_turn = np.real(2/np.sqrt(r31*r42)*fobs)
+        # Ir_total = 2*Ir_turn
+    if case == 2:
+        r3142sqrt = np.sqrt(r31*r42)
+        x2ro = np.sqrt(r31/r41)
+        x2rp = np.sqrt((r31*(rp-r4))/(r41*(rp-r3)))
+        I2rp = 2/r3142sqrt*ellipkinc(np.arcsin(x2rp),k)
+        I2ro = 2/r3142sqrt*ellipkinc(np.arcsin(x2ro),k)#this is the previous fobs
         Ir_total = I2ro-I2rp      
+
+
+
+        # for n in range(nmin, nmax+1):
+        #     m += 1
+        #     Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
+        #     Irmask = Ir<Ir_total
+        #     signpr = np.sign(Ir_turn-Ir)
+        #     ffac = 1 / 2 * np.real(r31 * r42)**(1/2)
+        #     # snnum = np.ones_like(rho)
+        #     snnum = ellipj(((ffac*Ir)-fobs), k)[0]
+        #     snsqr = snnum**2
+        #     # snsqr[eta_mask] = np.nan
+        #     snsqr[np.abs(snsqr)>1.1]=np.nan
+            
+        #     r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
+
+        #     print(r)
+        #     rtest = np.real((r2*r31 - r1*r32*snsqr)/(r31-r32*snsqr))
+        #     print(rtest)
+
+        #     # rvecs.append(r)
+        #     # r[eta_mask] =np.nan
+        #     r[~Irmask] = np.nan
+        #     rvec = np.nan_to_num(r)
+        #     Irmasks.append(Irmask)
+        #     signprs.append(signpr)
+        #     rvecs.append(rvec)
+        #     if not axisymmetric:
+        #         pass
+
+    if case == 1 or case == 2:
 
         for n in range(nmin, nmax+1):
             m+= 1
             Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             Irmask = Ir<Ir_total
-            X2 = 1/2*r3142sqrt *(-Ir +signpr*I2ro)
+            X2 = 1/2*r3142sqrt *(-Ir + I2ro)
             snnum = ellipj(X2,k)[0]
             snsqr = snnum**2
             rs =(r4*r31 - r3*r41*snsqr)/(r31-r41*snsqr)
@@ -291,9 +292,6 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         k3 = ((Agl+Bgl)**2 - (r2-r1)**2)/(4*Agl*Bgl)
         I3r_angle = np.arccos((Agl-Bgl)/(Agl+Bgl))
         I3r = ellipkinc(I3r_angle, k3) / np.sqrt(Agl*Bgl)
-
-        Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
-        Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
 
         I3rp_angle = np.arccos((Agl*(rp-r1)-Bgl*(rp-r2))/(Agl*(rp-r1)+Bgl*(rp-r2)))
         I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    

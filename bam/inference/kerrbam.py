@@ -159,7 +159,7 @@ class KerrBam:
 
         
         #convert rho_uas to gravitational units
-        rvecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
+        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
             
         for n in range(self.nmax+1):
             profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+spec)

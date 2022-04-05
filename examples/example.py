@@ -32,11 +32,11 @@ iota=np.pi/2
 
 b = KerrBam(fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=PA,  chi=chi,eta=eta, nmax=nmax, beta=beta, iota=iota, polflux=True)
 
-im = b.make_image()
+im = b.make_rotated_image()
 im.rf = obs_sa.rf
-b.make_rotated_image().display(plotp=True)#, nvec=40)
+im.display(plotp=True)#, nvec=40)
 
-to_fit = im.observe_same(obs_sa, ampcal=False,phasecal=False)
+to_fit = b.observe_same(obs_sa, ampcal=False,phasecal=False, seed = 4)
 to_fit.plotall('u','v',conj=True)
 
 frac = 0

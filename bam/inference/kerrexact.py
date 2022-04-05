@@ -20,6 +20,26 @@ minkmetric = np.diag([-1, 1, 1, 1])
 
 kernel = np.ones((3,3))
 
+
+def R1_R2(al,phi,j,ret_r2=True): #B62 and B65
+    al2 = al**2
+    s2phi = np.sqrt(1-j*np.sin(phi)**2)
+    p1 = np.sqrt((al2 -1)/(j+(1-j)*al2))
+    f1 = 0.5*p1*np.log(np.abs((p1*s2phi+np.sin(phi))/(p1*s2phi-np.sin(phi))))
+    nn = al2/(al2-1)
+    R1 = (ellip_pi_arr(nn,phi,j) - al*f1)/(1-al2)
+
+    if ret_r2:
+        F = ellipkinc(phi,j)
+        E = ellipeinc(phi,j)
+        R2 = (F - (al2/(j+(1-j)*al2))*(E - al*np.sin(phi)*s2phi/(1+al*np.cos(phi)))) / (al2-1)
+        R2 = R2 + (2*j - nn)*R1 / (j + (1-j)*al2)
+
+    else:
+        R2=np.NaN
+
+    return (R1,R2)
+
 np.seterr(invalid='ignore')
 print("KerrBAM is silencing numpy warnings about invalid inputs (default: warn, now ignore). To undo, call np.seterr(invalid='warn').")
 
@@ -210,6 +230,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     if len(sb) == 0:
         # print("No support in case "+str(case))
         return [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)]
+    r21 = r2-r1
     r31 = r3-r1
     r32 = r3-r2
     r42 = r4-r2
@@ -309,13 +330,29 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         Agl = np.real(np.sqrt(r32*r42))
         Bgl = np.real(np.sqrt(r31*r41))
         k3 = ((Agl+Bgl)**2 - (r2-r1)**2)/(4*Agl*Bgl)
-        I3r_angle = np.arccos((Agl-Bgl)/(Agl+Bgl))
-        I3r = ellipkinc(I3r_angle, k3) / np.sqrt(Agl*Bgl)
-        I3rp_angle = np.arccos((Agl*(rp-r1)-Bgl*(rp-r2))/(Agl*(rp-r1)+Bgl*(rp-r2)))
-        I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
+        rp1 = rp-r1
+        rp2 = rp-r2
+        x3rp = (Agl*rp1 - Bgl*rp2)/(Agl*rp1 + Bgl*rp2) # GL19a, B55
+        x3ro = (Agl-Bgl)/(Agl+Bgl)
+
+        if not axisymmetric:
+            alp = -1/x3rp
+            x3rm = (AA*rrm1 - BB*rrm2)/(AA*rrm1 + BB*rrm2) # GL19a, B55
+            alm = -1/x3rm
+            alo = -1/x3ro
+        pref = 1/np.sqrt(Agl*Bgl)
+        auxarg = np.arccos(x3ro)
+        Ir_o = pref*ellipkinc(auxarg, k3)
+        Ir_p = pref*ellipkinc(np.arccos(x3rp),k3)
+        Ir_total = Ir_o - Ir_p
+        # al0 = (Agl+Bgl)/(Bgl-Agl)
+        # I3r_angle = np.arccos(1/al0)
+        # I3r = ellipkinc(I3r_angle, k3) / np.sqrt(Agl*Bgl)
+        # I3rp_angle = np.arccos((Agl*(rp-r1)-Bgl*(rp-r2))/(Agl*(rp-r1)+Bgl*(rp-r2)))
+        # I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
         
 
-        Ir_total = I3r - I3rp
+        # Ir_total = I3r - I3rp
         signpr = np.ones_like(Agl)
         for n in range(nmin, nmax+1):
             m += 1
@@ -324,7 +361,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
             X3 = np.sqrt(Agl*Bgl)*(Ir - signpr * I3r)
 
-            cnnum = ellipj(X3, k3)[1]
+            snnum, cnnum, amnum, dnnum = ellipj(X3, k3)
             signptheta = (-1)**m * sb
             ffac = 1 / 2 * np.real(r31 * r42)**(1/2)
 
@@ -337,9 +374,14 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             Irmasks.append(Irmask)
 
             if not axisymmetric:
-                pass
+                # pass
                 #TODO figure out conversion to Andrew's definitions
-                # tau = Ir
+                tau = Ir
+                #need:
+                # al0
+                amX3 = amnum
+                # auxarg
+
 
                 # def R1_R2(al,phi,j,ret_r2=True): #B62 and B65
                 #     al2 = al**2
@@ -347,7 +389,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 #     p1 = np.sqrt((al2 -1)/(j+(1-j)*al2))
                 #     f1 = 0.5*p1*np.log(np.abs((p1*s2phi+np.sin(phi))/(p1*s2phi-np.sin(phi))))
                 #     nn = al2/(al2-1)
-                #     R1 = (ellippi_arr(nn,phi,j) - al*f1)/(1-al2)
+                #     R1 = (ellip_pi_arr(nn,phi,j) - al*f1)/(1-al2)
 
                 #     if ret_r2:
                 #         F = sp.ellipkinc(phi,j)
@@ -360,29 +402,29 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
                 #     return (R1,R2)
 
-                # # # building blocks of the path integrals
-                # R1_a_0, R2_a_0 = R1_R2(al0,amX3,k3)
-                # R1_b_0, R2_b_0 = R1_R2(al0,auxarg,k3)
-                # R1_a_p, _ = R1_R2(alp,amX3,k3,ret_r2=False)
-                # R1_b_p, _ = R1_R2(alp,auxarg,k3,ret_r2=False)
+                # # building blocks of the path integrals
+                R1_a_0, R2_a_0 = R1_R2(al0,amX3,k3)
+                R1_b_0, R2_b_0 = R1_R2(al0,auxarg,k3)
+                R1_a_p, _ = R1_R2(alp,amX3,k3,ret_r2=False)
+                R1_b_p, _ = R1_R2(alp,auxarg,k3,ret_r2=False)
                 # if a>MINSPIN:
-                #     R1_a_m, _ = R1_R2(alm,amX3,k3,ret_r2=False)
-                #     R1_b_m, _ = R1_R2(alm,auxarg,k3,ret_r2=False)
+                R1_a_m, _ = R1_R2(alm,amX3,k3,ret_r2=False)
+                R1_b_m, _ = R1_R2(alm,auxarg,k3,ret_r2=False)
                 # else:
                 #     R1_a_m = np.zeros(R1_a_p.shape)
                 #     R1_b_m = np.zeros(R1_a_p.shape)
 
-                # Pi_1 = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2)) * (R1_a_0 - s*R1_b_0) # B81
-                # Pi_2 = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2))**2 * (R2_a_0 - s*R2_b_0) # B81
-                # Pi_p = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl*rrp2 - Agl*rrp1))*(R1_a_p - s*R1_b_p) # B82
-                # Pi_m = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl*rrm2 - Agl*rrm1))*(R1_a_m - s*R1_b_m) # B82
+                Pi_1 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2)) * (R1_a_0 - R1_b_0) # B81
+                Pi_2 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2))**2 * (R2_a_0 - R2_b_0) # B81
+                Pi_p = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rp2 - Agl*rp1))*(R1_a_p - R1_b_p) # B82
+                Pi_m = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rm2 - Agl*rm1))*(R1_a_m - R1_b_m) # B82
 
-                # # final integrals
-                # pref = ((Bgl*rr2 + Agl*rr1)/(Bgl+Agl))
-                # I1 = pref*(-tau) + Pi_1 # B78
-                # I2 = pref**2*(-tau) + 2*pref*Pi_1 + np.sqrt(Agl*Bgl)*Pi_2 # B79
-                # Ip = -((Bgl+Agl)*(-tau) + Pi_p) / (Bgl*rrp2 + Agl*rrp1) # B80
-                # Im = -((Bgl+Agl)*(-tau) + Pi_m) / (Bgl*rrm2 + Agl*rrm1) # B80
+                # final integrals
+                pref = ((Bgl*rr2 + Agl*rr1)/(Bgl+Agl))
+                I1 = pref*(-tau) + Pi_1 # B78
+                I2 = pref**2*(-tau) + 2*pref*Pi_1 + np.sqrt(Agl*Bgl)*Pi_2 # B79
+                Ip = -((Bgl+Agl)*(-tau) + Pi_p) / (Bgl*rrp2 + Agl*rrp1) # B80
+                Im = -((Bgl+Agl)*(-tau) + Pi_m) / (Bgl*rrm2 + Agl*rrm1) # B80
 
     if case ==4:
         pass

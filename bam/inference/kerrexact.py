@@ -1,16 +1,20 @@
 """
 Implementation of the Kerr toy model for exact computation.
+
+The phi computations are almost direct copies of Andrew Chael's kgeo.
+
+Andrew is a co-author on the paper associated with this code.
 """
 
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.special import ellipj, ellipk, ellipkinc
+from scipy.special import ellipj, ellipk, ellipkinc, ellipeinc
 from scipy.interpolate import griddata
 from skimage.transform import rescale, resize
 from scipy.signal import convolve2d
 from bam.inference.model_helpers import get_rho_varphi_from_FOV_npix
-
+from bam.inference.scipy_ellip_binding import ellip_pi_arr
 
 minkmetric = np.diag([-1, 1, 1, 1])
 
@@ -161,10 +165,10 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         kfphi = kfuppers[:, 3,0]
         spin = a
         #kappa1 and kappa2
-        AA = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
-        BB = (rs**2 + spin**2) * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
-        kappa1 = rs * AA
-        kappa2 = -rs * BB
+        prekappa1 = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
+        prekappa2 = (rs**2 + spin**2) * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
+        kappa1 = rs * prekappa1
+        kappa2 = -rs * prekappa2
         # kappa1 = np.clip(np.real(kappa1), -20, 20)
         
         #screen appearance
@@ -194,6 +198,8 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
 
 #these should return r, phi, tau, tau_tot
 
+r_o = np.infty
+
 def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, nmin=0):
     """
     Case 1: r1, r2, r3, r4 are real, r2<rp<r3.
@@ -208,6 +214,8 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     r32 = r3-r2
     r42 = r4-r2
     r41 = r4-r1
+    r43 = r4-r3
+
     k = (r32*r41 / (r31*r42))
     urat = up/um
     Kurat = ellipk(urat)
@@ -220,6 +228,9 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
     Fobs = ellipkinc(np.arcsin(Fobs_sin), urat)
 
+    if not axisymmetric:
+        pref = 1/np.sqrt(a**2 * um)
+        Gph_o = -pref * ellip_pi_arr(up, Fobs_sin, k)
 
     # sb = np.sign(beta)
     if case == 1:
@@ -241,36 +252,6 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         I2ro = 2/r3142sqrt*ellipkinc(np.arcsin(x2ro),k)#this is the previous fobs
         Ir_total = I2ro-I2rp      
 
-
-
-        # for n in range(nmin, nmax+1):
-        #     m += 1
-        #     Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
-        #     Irmask = Ir<Ir_total
-        #     signpr = np.sign(Ir_turn-Ir)
-        #     ffac = 1 / 2 * np.real(r31 * r42)**(1/2)
-        #     # snnum = np.ones_like(rho)
-        #     snnum = ellipj(((ffac*Ir)-fobs), k)[0]
-        #     snsqr = snnum**2
-        #     # snsqr[eta_mask] = np.nan
-        #     snsqr[np.abs(snsqr)>1.1]=np.nan
-            
-        #     r = np.real((r4*r31 - r3*r41*snsqr) / (r31-r41*snsqr))
-
-        #     print(r)
-        #     rtest = np.real((r2*r31 - r1*r32*snsqr)/(r31-r32*snsqr))
-        #     print(rtest)
-
-        #     # rvecs.append(r)
-        #     # r[eta_mask] =np.nan
-        #     r[~Irmask] = np.nan
-        #     rvec = np.nan_to_num(r)
-        #     Irmasks.append(Irmask)
-        #     signprs.append(signpr)
-        #     rvecs.append(rvec)
-        #     if not axisymmetric:
-        #         pass
-
     if case == 1 or case == 2:
 
         for n in range(nmin, nmax+1):
@@ -291,11 +272,38 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             rvecs.append(rvec)
             signprs.append(signpr)
             Irmasks.append(Irmask)
-            if not axisymmetric:
+            if not axisymmetric:      
+
+                auxarg = np.arcsin(x2ro)
+
+                rp3 = rp - r3
+                rm3 = rm - r3
+                rp4 = rp - r4
+                rm4 = rm - r4
+
                 dX2dtau = -0.5*r3142sqrt
                 dsn2dtau = 2*snnum*cnnum*dnnum*dX2dtau
+                drsdtau = -r31*r43*r41*dsn2dtau / ((r31-r41*snsqr)**2)
+                Rpot_o = (r_o-r1)*(r_o-r2)*(r_o-r3)*(r_o-r4)
+                drsdtau_o = s*np.sqrt(Rpot_o)
+                H = drsdtau / (r - r3) - drsdtau_o/(r_o-r3)
+                E = np.sqrt(r31*r42)*(ellipkinc(amnum,k) - ellipeinc(auxarg, k))
+                Pi_1 = (2./np.sqrt(r31*r42))*(ellip_pi_arr(r41/r31,amnum,k)-ellip_pi_arr(r41/r31,auxarg,k))
+                Pi_p = (2./np.sqrt(r31*r42))*(r43/(rp3*rp4))*(ellip_pi_arr((rp3*r41)/(rp4*r31),amnum,k)-
+                                                                 ellip_pi_arr((rp3*r41)/(rp4*r31),auxarg,k))
+                Pi_m = (2./np.sqrt(r31*r42))*(r43/(rm3*rm4))*(ellip_pi_arr((rm3*r41)/(rm4*r31),amnum,k)-
+                                                                 ellip_pi_arr((rm3*r41)/(rm4*r31),auxarg,k))
 
+                # final integrals
+                I1 = r3*(-Ir) + r43*Pi_1 # B48
+                I2 = H - 0.5*(r1*r4 + r2*r3)*(-tau) - E # B49
+                Ip = Ir/rp3 - Pi_p # B50
+                Im = Ir/rm3 - Pi_m # B50
+                I_phi = (2*a/(rp-rm))*((rp - 0.5*a*lam)*Ip - (rm - 0.5*a*lam)*Im) # B1
 
+                phi = I_phi + lam * Gph_o
+                phi[~Irmask] = np.nan
+                phivecs.append(np.nan_to_num(phi))
 
     if case == 3:
         Agl = np.real(np.sqrt(r32*r42))
@@ -306,6 +314,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         I3rp_angle = np.arccos((Agl*(rp-r1)-Bgl*(rp-r2))/(Agl*(rp-r1)+Bgl*(rp-r2)))
         I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
         
+
         Ir_total = I3r - I3rp
         signpr = np.ones_like(Agl)
         for n in range(nmin, nmax+1):
@@ -326,8 +335,54 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             rvecs.append(rvec)
             signprs.append(signpr)
             Irmasks.append(Irmask)
+
             if not axisymmetric:
                 pass
+                #TODO figure out conversion to Andrew's definitions
+                # tau = Ir
+
+                # def R1_R2(al,phi,j,ret_r2=True): #B62 and B65
+                #     al2 = al**2
+                #     s2phi = np.sqrt(1-j*np.sin(phi)**2)
+                #     p1 = np.sqrt((al2 -1)/(j+(1-j)*al2))
+                #     f1 = 0.5*p1*np.log(np.abs((p1*s2phi+np.sin(phi))/(p1*s2phi-np.sin(phi))))
+                #     nn = al2/(al2-1)
+                #     R1 = (ellippi_arr(nn,phi,j) - al*f1)/(1-al2)
+
+                #     if ret_r2:
+                #         F = sp.ellipkinc(phi,j)
+                #         E = sp.ellipeinc(phi,j)
+                #         R2 = (F - (al2/(j+(1-j)*al2))*(E - al*np.sin(phi)*s2phi/(1+al*np.cos(phi)))) / (al2-1)
+                #         R2 = R2 + (2*j - nn)*R1 / (j + (1-j)*al2)
+
+                #     else:
+                #         R2=np.NaN
+
+                #     return (R1,R2)
+
+                # # # building blocks of the path integrals
+                # R1_a_0, R2_a_0 = R1_R2(al0,amX3,k3)
+                # R1_b_0, R2_b_0 = R1_R2(al0,auxarg,k3)
+                # R1_a_p, _ = R1_R2(alp,amX3,k3,ret_r2=False)
+                # R1_b_p, _ = R1_R2(alp,auxarg,k3,ret_r2=False)
+                # if a>MINSPIN:
+                #     R1_a_m, _ = R1_R2(alm,amX3,k3,ret_r2=False)
+                #     R1_b_m, _ = R1_R2(alm,auxarg,k3,ret_r2=False)
+                # else:
+                #     R1_a_m = np.zeros(R1_a_p.shape)
+                #     R1_b_m = np.zeros(R1_a_p.shape)
+
+                # Pi_1 = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2)) * (R1_a_0 - s*R1_b_0) # B81
+                # Pi_2 = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2))**2 * (R2_a_0 - s*R2_b_0) # B81
+                # Pi_p = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl*rrp2 - Agl*rrp1))*(R1_a_p - s*R1_b_p) # B82
+                # Pi_m = ((2*rr21*np.sqrt(Agl*Bgl))/(Bgl*rrm2 - Agl*rrm1))*(R1_a_m - s*R1_b_m) # B82
+
+                # # final integrals
+                # pref = ((Bgl*rr2 + Agl*rr1)/(Bgl+Agl))
+                # I1 = pref*(-tau) + Pi_1 # B78
+                # I2 = pref**2*(-tau) + 2*pref*Pi_1 + np.sqrt(Agl*Bgl)*Pi_2 # B79
+                # Ip = -((Bgl+Agl)*(-tau) + Pi_p) / (Bgl*rrp2 + Agl*rrp1) # B80
+                # Im = -((Bgl+Agl)*(-tau) + Pi_m) / (Bgl*rrm2 + Agl*rrm1) # B80
 
     if case ==4:
         pass
@@ -371,7 +426,7 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     case3 = ir1_0 * ir2_0 * ~ir3_0 * ~ir3_0 * c34 * (rr2<rp)
     # case4 = ~ir1_0 * ~ir2_0 * ~ir3_0 * ~ir4_0 * c12 * c34
 
-    all_signpthetas = [np.ones_like(rho)]
+    all_signpthetas = [np.ones_like(rho) for n in range(nmin,nmax+1)]
     sb = np.sign(beta)
     m = sb + nmin 
     m[m>0] = 0

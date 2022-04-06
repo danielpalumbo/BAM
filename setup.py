@@ -9,4 +9,4 @@ setup(name='bam',
       license='GPLv3',
       packages=['bam',
                 'bam.inference'],
-      install_requires=['numpy','scipy','dynesty','matplotlib','ehtim','dill','scikit-image'])
+      install_requires=['numpy','scipy>=1.8','dynesty','matplotlib','ehtim','dill','scikit-image'])

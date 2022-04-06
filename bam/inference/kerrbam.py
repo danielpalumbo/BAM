@@ -148,7 +148,7 @@ class KerrBam:
         
         #convert rho_uas to gravitational units
         # rhovec = self.rho_uas/MoDuas
-        return kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
+        return kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
 
     def compute_image(self, imparams):
         """
@@ -160,10 +160,13 @@ class KerrBam:
 
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac)        
+        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
             
         for n in range(self.nmax+1):
-            profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+spec)
+            if self.axisymmetric:
+                profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+spec)
+            else:
+                profile = self.jfunc(rvecs[n],phivecs[n],jargs)*redshifts[n]**(3+spec)
             if self.polflux:
                 ivecs[n]*=profile
                 qvecs[n]*=profile

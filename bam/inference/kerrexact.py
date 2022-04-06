@@ -44,7 +44,8 @@ def R1_R2(al,phi,j,ret_r2=True): #B62 and B65
     return (R1,R2)
 
 np.seterr(invalid='ignore')
-print("KerrBAM is silencing numpy warnings about invalid inputs (default: warn, now ignore). To undo, call np.seterr(invalid='warn').")
+np.seterr(divide='ignore')
+print("KerrBAM is silencing numpy warnings about invalid inputs and division by zero (default: warn, now ignore). To undo, call np.seterr(invalid='warn').")
 
 
 def get_lam_eta(alpha, beta, inc, a):
@@ -340,7 +341,32 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 Im = Ir/rm3 - Pi_m # B50
                 I_phi = (2*a/(rp-rm))*((rp - 0.5*a*lam)*Ip - (rm - 0.5*a*lam)*Im) # B1
 
-                phi = I_phi + lam * Gph_o
+
+                #finish Gph calculation
+                snarg = np.sqrt(-a**2 * um)*(-tau+Gth_o)
+                # print(snarg)
+                snarg = snarg.astype(float)
+                sinPhi_tau = np.zeros_like(snarg)
+                Phi_tau = np.zeros_like(snarg)
+                jmask = np.abs(snarg)<1e-12
+                # print(jmask)
+                if np.any(jmask):
+                    sinPhi_tau[jmask] = snarg[jmask]
+                    Phi_tau[jmask] = snarg[jmask]
+                if np.any(~jmask):
+                    mk = (urat/(urat-1))[~jmask] # real, in (0,1) since k<0
+                    # mk = np.outer(np.ones(1),mk)[~jmask]
+                    ellipfuns = ellipj(snarg[~jmask]/np.sqrt(1-mk), mk)
+                    #sn(sqrt(1-m)x | k) = sqrt(1-m)*sn(x|m)/dn(x|m)
+                    sinPhi_tau[~jmask] = np.sqrt(1-mk) * ellipfuns[0]/ellipfuns[2]
+                    #am(sqrt(1-m)x | k) = pi/2 - am(K(m) - x | m for m <=1
+                    Phi_tau[~jmask] = 0.5*np.pi-ellipj(ellipk(mk) - snarg[~jmask]/np.sqrt(1-mk), mk)[3]
+
+                Gph = (1/np.sqrt(-a2um)*ellip_pi_arr(up, Phi_tau, urat)-Gph_o)#.astype(float)
+
+
+
+                phi = I_phi + lam * Gph
                 phi[~Irmask] = np.nan
                 # print("Computed case 1+2 phi!")
                 # print(phi)
@@ -446,9 +472,28 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 I_phi = (2*a/(rp-rm))*((rp - 0.5*a*lam)*Ip - (rm - 0.5*a*lam)*Im) # B1
                 # print(I_phi)
 
-                # snarg = 
+                #finish Gph calculation
+                snarg = np.sqrt(-a**2 * um)*(-tau+Gth_o)
+                sinPhi_tau = np.zeros_like(snarg)
+                Phi_tau = np.zeros_like(snarg)
+                jmask = np.abs(snarg)<1e-12
+                if np.any(jmask):
+                    sinPhi_tau[jmask] = snarg[jmask]
+                    Phi_tau[jmask] = snarg[jmask]
+                if np.any(~jmask):
+                    mk = (urat/(urat-1))[~jmask] # real, in (0,1) since k<0
+                    # mk = np.outer(np.ones(snarg.shape[0]),mk)[~jmask]
+                    ellipfuns = ellipj(snarg[~jmask]/np.sqrt(1-mk), mk)
+                    #sn(sqrt(1-m)x | k) = sqrt(1-m)*sn(x|m)/dn(x|m)
+                    sinPhi_tau[~jmask] = np.sqrt(1-mk) * ellipfuns[0]/ellipfuns[2]
+                    #am(sqrt(1-m)x | k) = pi/2 - am(K(m) - x | m for m <=1
+                    Phi_tau[~jmask] = 0.5*np.pi-ellipj(ellipk(mk) - snarg[~jmask]/np.sqrt(1-mk), mk)[3]
 
-                phi = I_phi + lam * Gph_o
+                Gph = (1/np.sqrt(-a2um)*ellip_pi_arr(up, Phi_tau, urat)-Gph_o)
+
+
+
+                phi = I_phi + lam * Gph
                 phi[~Irmask] = np.nan
                 # print("Computed case 3 phi!")
                 # print(phi)

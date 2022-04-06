@@ -15,7 +15,7 @@ obs.add_scans()
 obs_sa = obs.avg_coherent(0., scan_avg=True)
 
 fov =60*eh.RADPERUAS
-npix = 40
+npix = 30
 jfunc = example_jfunc
 jarg_names = ['peak_r','thickness']
 jargs = [4.5, 2.]#, np.pi/2]

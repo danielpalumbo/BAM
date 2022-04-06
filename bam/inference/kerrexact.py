@@ -244,14 +244,18 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     k = (r32*r41 / (r31*r42))
     urat = up/um
     Kurat = ellipk(urat)
-    m = sb + nmin 
+    # print(nmin)
+    #option 1
+    m = sb.copy()
     m[m>0] = 0
+    m+= nmin
     rvecs = []
     phivecs = []
     Irmasks = []
     signprs = []
     # Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
     Fobs_arg = np.arcsin(np.cos(inc)/np.sqrt(up))
+    # print(Fobs_arg)
     Fobs = ellipkinc(Fobs_arg, urat)
 
     if not axisymmetric:
@@ -291,6 +295,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
         for n in range(nmin, nmax+1):
             m+= 1
+            # print('m',m)
             Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             if case == 1:
                 signpr = np.sign(Ir_turn-Ir)
@@ -329,10 +334,6 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 Pi_m = (2./np.sqrt(r31*r42))*(r43/(rm3*rm4))*(ellip_pi_arr((rm3*r41)/(rm4*r31),amnum,k)-
                                                                  ellip_pi_arr((rm3*r41)/(rm4*r31),auxarg,k))
 
-                # print("H",H)
-                # print("E",E)
-                # print("Pi_1",Pi_1)
-                # print("Pi_m",Pi_m)
 
                 # final integrals
                 I1 = r3*(-Ir) + r43*Pi_1 # B48
@@ -344,12 +345,11 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
                 #finish Gph calculation
                 snarg = np.sqrt(-a**2 * um)*(-tau+Gth_o)
-                # print(snarg)
+
                 snarg = snarg.astype(float)
                 sinPhi_tau = np.zeros_like(snarg)
                 Phi_tau = np.zeros_like(snarg)
                 jmask = np.abs(snarg)<1e-12
-                # print(jmask)
                 if np.any(jmask):
                     sinPhi_tau[jmask] = snarg[jmask]
                     Phi_tau[jmask] = snarg[jmask]
@@ -368,8 +368,6 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
                 phi = I_phi + lam * Gph
                 phi[~Irmask] = np.nan
-                # print("Computed case 1+2 phi!")
-                # print(phi)
                 phivecs.append(np.nan_to_num(phi))
 
     if case == 3:
@@ -456,12 +454,6 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 Pi_p = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rp2 - Agl*rp1))*(R1_a_p - R1_b_p) # B82
                 Pi_m = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rm2 - Agl*rm1))*(R1_a_m - R1_b_m) # B82
 
-                # print("H",H)
-                # print("E",E)
-                # print("Pi_1",Pi_1)
-                # print("Pi_2",Pi_2)
-                # print("Pi_p",Pi_p)
-                # print("Pi_m",Pi_m)
 
                 # final integrals
                 pref = ((Bgl*r2 + Agl*r1)/(Bgl+Agl))
@@ -495,8 +487,6 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
                 phi = I_phi + lam * Gph
                 phi[~Irmask] = np.nan
-                # print("Computed case 3 phi!")
-                # print(phi)
                 phivecs.append(np.nan_to_num(phi))
     if case ==4:
         pass
@@ -542,8 +532,11 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
 
     all_signpthetas = [np.ones_like(rho) for n in range(nmin,nmax+1)]
     sb = np.sign(beta)
-    m = sb + nmin 
+
+
+    m = sb.copy()
     m[m>0] = 0
+    m += nmin 
     for ni in range(len(ns)):
         m+=1
         all_signpthetas[ni] = (-1)**m*sb
@@ -554,10 +547,7 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     rvecs2, phivecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     rvecs3, phivecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     # rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,rm,rp,sb[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
-    
-    # print(phivecs1)
-    # print(phivecs2)
-    # print(phivecs3)
+   
 
     #stitch together cases
     all_rvecs = []
@@ -614,25 +604,47 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
             # subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
             # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
-            sub_rvecs, sub_phivecs, sub_signprs, sub_alphas, sub_betas, sub_lams, sub_etas = ray_trace_all(submudists, fov_uas, MoDuas, subvarphi, inc, a, n, axisymmetric=axisymmetric, nmin=n, adap_fac=1)
+            sub_rvecs, sub_phivecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas = ray_trace_all(submudists, fov_uas, MoDuas, subvarphi, inc, a, n, axisymmetric=axisymmetric, nmin=n, adap_fac=1)
             # subrvec, subivec, subqvec, subuvec, subvvec, subredshift = raytrace_single_n(submudists, fov_uas, MoDuas, subvarphi, inc, a, n, nmin=n, adap_fac=1)
-            
-            rvec = np.zeros(adap_fac**2*xdim**2)
-            phivec = np.zeros(adap_fac**2*xdim**2)
-            signpr = np.zeros(adap_fac**2*xdim**2)
+            newsize = adap_fac**2*xdim**2
+            rvec = np.zeros(newsize)
+            phivec = np.zeros(newsize)
+            signpr = np.zeros(newsize)
+            signptheta = np.zeros(newsize)
+            lamvec = np.zeros(newsize)
+            etavec = np.zeros(newsize)
+            alphavec = np.zeros(newsize)
+            betavec = np.zeros(newsize)
+
             rvec[Irmask]=sub_rvecs[0].flatten()
-            signpr[Irmask]=sub_signprs[0].flatten()
             if not axisymmetric:
                 phivec[Irmask]=sub_phivecs[0].flatten()
+            signpr[Irmask]=sub_signprs[0].flatten()
+            signptheta[Irmask]=sub_signpthetas[0].flatten()
+            lamvec[Irmask]=sub_lams[0].flatten()
+            etavec[Irmask]=sub_etas[0].flatten()
+            alphavec[Irmask]=sub_alphas[0].flatten()
+            betavec[Irmask]=sub_betas[0].flatten()
+
+
+            rvec[rvec>20]=20
+            # plt.imshow(rvec.reshape((adap_fac*xdim,adap_fac*xdim)))
+            # plt.colorbar()
+            # plt.show()
+            # plt.imshow(lamvec.reshape((adap_fac*xdim,adap_fac*xdim)))
+            # plt.colorbar()
+            # plt.show()
+            
+            
             all_rvecs[ni]=rvec
             all_phivecs[ni]=phivec
             all_signprs[ni]=signpr
-            lams[ni] = sub_lams[0].flatten()
-            etas[ni] = sub_etas[0].flatten()
-            alphas[ni] = sub_alphas[0].flatten()
-            betas[ni] = sub_betas[0].flatten()
+            all_signpthetas[ni]=signptheta
+            lams[ni] = lamvec
+            etas[ni] = etavec
+            alphas[ni] = alphavec
+            betas[ni] = betavec
 
-    # print(all_phivecs)
 
     return all_rvecs, all_phivecs, all_signprs, all_signpthetas, alphas, betas, lams, etas
 

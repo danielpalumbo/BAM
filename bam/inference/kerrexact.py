@@ -148,7 +148,6 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         pr_low = signpr * np.sqrt(bigR)/bigDelta
         pr_low[pr_low>10] = 10
         pr_low[pr_low<-10] = -10
-        # print(np.sum(np.isnan(pr_low)))
         pphi_low = lam
         ptheta_low = signptheta*np.sqrt(eta)
         plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
@@ -222,7 +221,7 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
 
 #these should return r, phi, tau, tau_tot
 
-r_o = np.infty
+r_o = 1000
 
 def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, nmin=0):
     """
@@ -253,15 +252,14 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     phivecs = []
     Irmasks = []
     signprs = []
-    # Fobs_sin = np.clip(np.cos(inc)/np.sqrt(up), -1, 1)
     Fobs_arg = np.arcsin(np.cos(inc)/np.sqrt(up))
-    # print(Fobs_arg)
     Fobs = ellipkinc(Fobs_arg, urat)
 
     if not axisymmetric:
-        a2um = a**2*um#pref = 1/np.sqrt(-a**2 * um)
-        Gph_o = -1/a2um * ellip_pi_arr(up, Fobs_arg, k)
-        Gth_o = -1/a2um * Fobs
+        a2um = a**2*um
+        Gph_o = -1/np.sqrt(-a2um) * ellip_pi_arr(up, Fobs_arg, urat)
+        # print(np.any(Gph_o<0))
+        Gth_o = -1/np.sqrt(-a2um) * Fobs
 
 
 
@@ -305,6 +303,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
             X2 = 1/2*r3142sqrt *(-Ir + I2ro)
             snnum, cnnum, dnnum, amnum = ellipj(X2,k)
+
             snsqr = snnum**2
             r =(r4*r31 - r3*r41*snsqr)/(r31-r41*snsqr)
             r[~Irmask] = np.nan
@@ -344,7 +343,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
 
                 #finish Gph calculation
-                snarg = np.sqrt(-a**2 * um)*(-tau+Gth_o)
+                snarg = np.sqrt(-a**2 * um)*(-tau+sb*Gth_o)
 
                 snarg = snarg.astype(float)
                 sinPhi_tau = np.zeros_like(snarg)
@@ -362,9 +361,9 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                     #am(sqrt(1-m)x | k) = pi/2 - am(K(m) - x | m for m <=1
                     Phi_tau[~jmask] = 0.5*np.pi-ellipj(ellipk(mk) - snarg[~jmask]/np.sqrt(1-mk), mk)[3]
 
-                Gph = (1/np.sqrt(-a2um)*ellip_pi_arr(up, Phi_tau, urat)-Gph_o)#.astype(float)
-
-
+                Gph = (1/np.sqrt(-a2um)*ellip_pi_arr(up, Phi_tau, urat)-sb*Gph_o)#.astype(float)
+                # print(Gph)
+                # print('Gph_o',Gph_o)
 
                 phi = I_phi + lam * Gph
                 phi[~Irmask] = np.nan
@@ -462,10 +461,9 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 Ip = -((Bgl+Agl)*(-tau) + Pi_p) / (Bgl*rp2 + Agl*rp1) # B80
                 Im = -((Bgl+Agl)*(-tau) + Pi_m) / (Bgl*rm2 + Agl*rm1) # B80
                 I_phi = (2*a/(rp-rm))*((rp - 0.5*a*lam)*Ip - (rm - 0.5*a*lam)*Im) # B1
-                # print(I_phi)
 
                 #finish Gph calculation
-                snarg = np.sqrt(-a**2 * um)*(-tau+Gth_o)
+                snarg = np.sqrt(-a**2 * um)*(-tau+sb*Gth_o)
                 sinPhi_tau = np.zeros_like(snarg)
                 Phi_tau = np.zeros_like(snarg)
                 jmask = np.abs(snarg)<1e-12
@@ -481,7 +479,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                     #am(sqrt(1-m)x | k) = pi/2 - am(K(m) - x | m for m <=1
                     Phi_tau[~jmask] = 0.5*np.pi-ellipj(ellipk(mk) - snarg[~jmask]/np.sqrt(1-mk), mk)[3]
 
-                Gph = (1/np.sqrt(-a2um)*ellip_pi_arr(up, Phi_tau, urat)-Gph_o)
+                Gph = (1/np.sqrt(-a2um)*ellip_pi_arr(up, Phi_tau, urat)-sb*Gph_o)
 
 
 
@@ -506,7 +504,6 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     beta = rho*np.sin(varphi)
     lam, eta = get_lam_eta(alpha,beta, inc, a)
     up, um = get_up_um(lam, eta, a)
-    # urat = up/um
     r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
     rr1 = np.real(r1)
     rr2 = np.real(r2)
@@ -533,6 +530,10 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     all_signpthetas = [np.ones_like(rho) for n in range(nmin,nmax+1)]
     sb = np.sign(beta)
 
+
+    # plt.imshow((up/um).reshape((xdim,xdim)))
+    # plt.colorbar()
+    # plt.show()
 
     m = sb.copy()
     m[m>0] = 0

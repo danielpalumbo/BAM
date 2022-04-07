@@ -20,6 +20,8 @@ minkmetric = np.diag([-1, 1, 1, 1])
 
 kernel = np.ones((3,3))
 
+phi_o = 3*np.pi/2
+r_o = np.infty
 
 def R1_R2(al,phi,j,ret_r2=True): #B62 and B65
     """
@@ -221,7 +223,6 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
 
 #these should return r, phi, tau, tau_tot
 
-r_o = 1000
 
 def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, nmin=0):
     """
@@ -365,7 +366,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 # print(Gph)
                 # print('Gph_o',Gph_o)
 
-                phi = I_phi + lam * Gph
+                phi = phi_o + I_phi + lam * Gph
                 phi[~Irmask] = np.nan
                 phivecs.append(np.nan_to_num(phi))
 
@@ -483,7 +484,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
 
 
-                phi = I_phi + lam * Gph
+                phi = phi_o + I_phi + lam * Gph
                 phi[~Irmask] = np.nan
                 phivecs.append(np.nan_to_num(phi))
     if case ==4:

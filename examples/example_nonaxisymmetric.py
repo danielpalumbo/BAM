@@ -31,10 +31,17 @@ nmax=1
 chi = -135/180*np.pi
 eta = None
 beta = 0.5
-a = -0.01
+a = -0.99
 iota=np.pi/2
 
 b = KerrBam(fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=PA,  chi=chi,eta=eta, nmax=nmax, beta=beta, iota=iota, polflux=True, axisymmetric=False)
+
+#look at the frame dragging by plotting the BL phi grid
+prims = b.get_primitives()
+phi = prims[1][0]%(2*np.pi)
+plt.imshow(phi.reshape((npix,npix)))
+plt.colorbar()
+plt.show()
 
 im = b.make_rotated_image()
 im.display(plotp=True)

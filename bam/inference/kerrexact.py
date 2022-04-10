@@ -645,8 +645,6 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
             alphavec[Irmask]=sub_alphas[0].flatten()
             betavec[Irmask]=sub_betas[0].flatten()
 
-
-            rvec[rvec>20]=20
             # plt.imshow(rvec.reshape((adap_fac*xdim,adap_fac*xdim)))
             # plt.colorbar()
             # plt.show()

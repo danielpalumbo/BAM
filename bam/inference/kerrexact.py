@@ -15,6 +15,8 @@ from skimage.transform import rescale, resize
 from scipy.signal import convolve2d
 from bam.inference.model_helpers import get_rho_varphi_from_FOV_npix
 from bam.inference.scipy_ellip_binding import ellip_pi_arr
+import time
+
 
 minkmetric = np.diag([-1, 1, 1, 1])
 
@@ -130,6 +132,7 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
     vvecs = []
     redshifts = []
     for n in range(len(rvecs)):
+
         r = rvecs[n]
         phi = phivecs[n]
         signpr = signprs[n]
@@ -143,26 +146,32 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         bigR = R(r, a, lam, eta)
         bigDelta = Delta(r, a)
         bigXi = Xi(r, a, np.pi/2)
+        rtXiDelta = np.sqrt(bigXi/bigDelta)/r
         littleomega = omega(r, a, np.pi/2)
 
         #lowered
         pt_low = -1*np.ones_like(r)
         pr_low = signpr * np.sqrt(bigR)/bigDelta
+
         pr_low[pr_low>10] = 10
         pr_low[pr_low<-10] = -10
         pphi_low = lam
         ptheta_low = signptheta*np.sqrt(eta)
         plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
-
+    
+        rpowneg2 = 1/r**2
+        ralamnum = (r**2 + a**2 - a*lam)/bigDelta
         #raised
-        pt = 1/r**2 * (-a*(a-lam) + (r**2+a**2) * (r**2 + a**2 -a * lam) / bigDelta)
-        pr = signpr * 1/r**2 * np.sqrt(bigR)
-        pphi = 1/r**2 * (-(a-lam)+a/Delta(r,a)*(r**2+a**2 - a*lam))
-        ptheta = signptheta*np.sqrt(eta) / r**2
+        pt = rpowneg2 * (-a*(a-lam) + (r**2+a**2) * ralamnum)
+        pr = signpr * rpowneg2 * np.sqrt(bigR)
+        pphi = rpowneg2 * (-(a-lam)+a*ralamnum)
+        ptheta = signptheta*np.sqrt(eta) *rpowneg2
+
+
         # praised.append([pt_up, pr_up, pphi_up, ptheta_up])
         #now everything to generate polarization
         
-        emutetrad = np.array([[1/r*np.sqrt(bigXi/bigDelta), zeros, zeros, littleomega/r*np.sqrt(bigXi/bigDelta)], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
+        emutetrad = np.array([[rtXiDelta, zeros, zeros, littleomega*rtXiDelta], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
         emutetrad = np.transpose(emutetrad,(2,0,1))
         boostmatrix = getlorentzboost(-boost, chi)
         #fluid frame tetrad
@@ -184,6 +193,8 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
             vvec = zeros
         #apply the tetrad to get kerr f
         kfuppers = np.matmul(coordtransforminv, fupperfluid)
+
+
         kft = kfuppers[:,0,0]
         kfr = kfuppers[:,1,0]
         kftheta = kfuppers[:,2,0]
@@ -214,11 +225,13 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
             vvec = np.real(np.nan_to_num(vvec))
         redshift = np.real(np.nan_to_num(redshift))
         ivec = np.sqrt(qvec**2+uvec**2)
+
         ivecs.append(ivec)
         qvecs.append(qvec)
         uvecs.append(uvec)
         vvecs.append(vvec)
         redshifts.append(redshift)
+
     return ivecs, qvecs, uvecs, vvecs, redshifts
 
 #these should return r, phi, tau, tau_tot
@@ -506,6 +519,8 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     lam, eta = get_lam_eta(alpha,beta, inc, a)
     up, um = get_up_um(lam, eta, a)
     r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
+    
+
     rr1 = np.real(r1)
     rr2 = np.real(r2)
     rr3 = np.real(r3)
@@ -543,13 +558,14 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
         m+=1
         all_signpthetas[ni] = (-1)**m*sb
 
-    
+
     #for now, don't raytrace case 4
     rvecs1, phivecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     rvecs2, phivecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     rvecs3, phivecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     # rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,rm,rp,sb[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
    
+
 
     #stitch together cases
     all_rvecs = []
@@ -588,6 +604,7 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     betas = [beta for n in ns]
     lams = [lam for n in ns]
     etas = [eta for n in ns]
+
 
     #do adaptive raytracing; for each except the lowest n subimage,
     #ray trace higher ns at higher resolution around the Irmask.

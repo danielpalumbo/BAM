@@ -68,7 +68,7 @@ dtypes = ['logcamp','cphase']
 
 #first, try to find the MAP with simulated annealing
 #you can skip this if you want to get right to the posteriors
-MAP_Bam = modelb.annealing_MAP(to_fit,data_types=dtypes)
+MAP_Bam, res = modelb.annealing_MAP(to_fit,data_types=dtypes)
 MAP_Bam.make_rotated_image().display()
 
 

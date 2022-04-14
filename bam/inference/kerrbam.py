@@ -440,6 +440,7 @@ class KerrBam:
                 out += ln_norm
             return out
         print("Built combined likelihood function!")
+        self.recent_loglike = loglike
         return loglike
 
     def KerrBam_from_eval(self, to_eval):
@@ -462,7 +463,7 @@ class KerrBam:
         to_eval = self.build_eval(res.x)
         new = self.KerrBam_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
-        return new
+        return new, res
         
 
     def build_prior_transform(self):
@@ -473,6 +474,7 @@ class KerrBam:
             for i in range(len(scaledcube)):
                 scaledcube[i] = functions[i](scaledcube[i])
             return scaledcube
+        self.recent_ptform = ptform
         return ptform
 
     

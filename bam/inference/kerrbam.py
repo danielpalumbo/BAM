@@ -40,6 +40,7 @@ class KerrBam:
         self.fov = fov
         self.fov_uas = fov/eh.RADPERUAS
         self.npix = npix
+        self.recent_loglike = None
         self.recent_sampler = None
         self.recent_results = None
         # self.MAP_values = None
@@ -245,6 +246,16 @@ class KerrBam:
             del to_eval[jn]
         to_eval['jargs'] = jargs
         return to_eval
+
+    def loglike_of_Bam(self, fbam):
+        """
+        Given a fixed-mode Bam object, compute the log likelihood of its parameters given
+        the current model Bam's fit parameters.
+        """
+        params = []
+        for name in self.modeled_names:
+            params.append(fbam.all_param_dict[name])
+        return self.recent_loglike(params)
     
 
     def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True):
@@ -442,6 +453,7 @@ class KerrBam:
         print("Built combined likelihood function!")
         self.recent_loglike = loglike
         return loglike
+
 
     def KerrBam_from_eval(self, to_eval):
         new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)

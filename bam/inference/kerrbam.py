@@ -583,7 +583,7 @@ class KerrBam:
 
     def Bam_from_sample(self, sample):
         to_eval = self.build_eval(sample)
-        new = self.KerrBAM_from_eval(to_eval)
+        new = self.KerrBam_from_eval(to_eval)
         new.modelim = new.make_image(modelim=True)
         return new
 

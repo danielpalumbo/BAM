@@ -581,15 +581,17 @@ class KerrBam:
         resampled = dyfunc.resample_equal(samples,weights)
         return resampled
 
+    def Bam_from_sample(self, sample):
+        to_eval = self.build_eval(sample)
+        new = self.KerrBAM_from_eval(to_eval)
+        new.modelim = new.make_image(modelim=True)
+        return new
+
     def random_sample_Bam(self, samples=None, weights=None):
         if samples is None:
             samples = self.resample_equal()
         sample = samples[random.randint(0,len(samples)-1)]
-        to_eval = self.build_eval(sample)
-        new = self.KerrBam_from_eval(to_eval)
-        new.modelim = new.make_image(modelim=True)
-        return new
-
+        return Bam_from_sample(sample)
 
     def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = '', modelim=False):
         if source == '':

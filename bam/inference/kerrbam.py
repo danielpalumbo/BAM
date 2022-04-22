@@ -591,7 +591,7 @@ class KerrBam:
         if samples is None:
             samples = self.resample_equal()
         sample = samples[random.randint(0,len(samples)-1)]
-        return Bam_from_sample(sample)
+        return self.Bam_from_sample(sample)
 
     def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = '', modelim=False):
         if source == '':

@@ -30,7 +30,7 @@ def logcamp_debias(log_camp, snr1, snr2, snr3, snr4):
     the definitions of numerators and denominators
     will work out.
 """
-def make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, debias=True):
+def make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, n1syserr, n2syserr, d1syserr, d2syserr, debias=True):
 
     if debias:
         p1 = amp_debias(n1amp, n1err, force_nonzero=True)
@@ -48,8 +48,14 @@ def make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, 
     snr3 = p3/d1err
     snr4 = p4/d2err
     
+    ssnr1 = p1/np.sqrt(n1err**2+n1syserr**2)
+    ssnr2 = p2/np.sqrt(n2err**2+n2syserr**2)
+    ssnr3 = p3/np.sqrt(d1err**2+d1syserr**2)
+    ssnr4 = p4/np.sqrt(d2err**2+d2syserr**2)
+
+
     logcamp = log(p1)+log(p2)-log(p3)-log(p4)
-    logcamp_err = sqrt(1/snr1**2 + 1/snr2**2 + 1/snr3**2 + 1/snr4**2)
+    logcamp_err = sqrt(1/ssnr1**2 + 1/ssnr2**2 + 1/ssnr3**2 + 1/ssnr4**2)
     if debias:
         logcamp = logcamp_debias(logcamp, snr1, snr2, snr3, snr4)
     
@@ -60,6 +66,8 @@ def amp_add_syserr(amp, amp_error, fractional=0, additive=0, var_a = 0, var_b=0,
     sigma = sqrt(amp_error**2+(fractional*amp)**2+additive**2 + var_sys(var_a, var_b, var_c, var_u0, u))
     return amp, sigma
 
+def amp_get_syserr(amp, amp_error, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, u = 0):
+    sys_err = sqrt((fractional*amp)**2+additive**2 + var_sys(var_a, var_b, var_c, var_u0, u))
 
 def vis_add_syserr(vis, amp_error, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, u = 0):
     sigma = sqrt(amp_error**2+(fractional*np.abs(vis))**2+additive**2 + var_sys(var_a, var_b, var_c, var_u0, u))
@@ -67,11 +75,11 @@ def vis_add_syserr(vis, amp_error, fractional=0, additive=0, var_a = 0, var_b=0,
 
 
 def logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, campd1, campd2, campd3, campd4, fractional=0, additive = 0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, debias=True):
-    n1amp, n1err = amp_add_syserr(n1amp, n1err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd1)
-    n2amp, n2err = amp_add_syserr(n2amp, n2err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd2)
-    d1amp, d1err = amp_add_syserr(d1amp, d1err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd3)
-    d2amp, d2err = amp_add_syserr(d2amp, d2err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd4)
-    return make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, debias=debias)
+    n1syserr = amp_get_syserr(n1amp, n1err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd1)
+    n2syserr = amp_get_syserr(n2amp, n2err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd2)
+    d1syserr = amp_get_syserr(d1amp, d1err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd3)
+    d2syserr = amp_get_syserr(d2amp, d2err, fractional=fractional, additive=additive, var_a=var_a, var_b=var_b, var_c=var_c, var_u0=var_u0, u = campd4)
+    return make_log_closure_amplitude(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, n1syserr, n2syserr, d1syserr, d2syserr, debias=debias)
 
 
 def make_bispectrum(v1, v2, v3, v1err, v2err, v3err):

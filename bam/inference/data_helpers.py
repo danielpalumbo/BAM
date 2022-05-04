@@ -68,7 +68,8 @@ def amp_add_syserr(amp, amp_error, fractional=0, additive=0, var_a = 0, var_b=0,
 
 def amp_get_syserr(amp, amp_error, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, u = 0):
     sys_err = sqrt((fractional*amp)**2+additive**2 + var_sys(var_a, var_b, var_c, var_u0, u))
-
+    return sys_err
+    
 def vis_add_syserr(vis, amp_error, fractional=0, additive=0, var_a = 0, var_b=0, var_c=0, var_u0=4e9, u = 0):
     sigma = sqrt(amp_error**2+(fractional*np.abs(vis))**2+additive**2 + var_sys(var_a, var_b, var_c, var_u0, u))
     return vis, sigma

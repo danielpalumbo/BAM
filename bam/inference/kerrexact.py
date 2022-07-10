@@ -16,7 +16,7 @@ from scipy.signal import convolve2d
 from bam.inference.model_helpers import get_rho_varphi_from_FOV_npix
 from bam.inference.scipy_ellip_binding import ellip_pi_arr
 import time
-
+from bam.inference.model_helpers import isiterable
 
 minkmetric = np.diag([-1, 1, 1, 1])
 
@@ -49,7 +49,7 @@ def R1_R2(al,phi,j,ret_r2=True): #B62 and B65
 
 np.seterr(invalid='ignore')
 np.seterr(divide='ignore')
-print("KerrBAM is silencing numpy warnings about invalid inputs and division by zero (default: warn, now ignore). To undo, call np.seterr(invalid='warn').")
+print("KerrBAM is silencing numpy warnings about invalid inputs and division by zero (default: warn, now: ignore). To undo, call np.seterr(invalid='warn') and np.seterr(divide='warn').")
 
 
 def get_lam_eta(alpha, beta, inc, a):
@@ -105,27 +105,38 @@ def Sigma(r, a, theta):
 def R(r, a, lam, eta):
     return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (eta + (a-lam)**2)
 
-def getlorentzboost(boost, chi):
+def getlorentzboost(boost, chi, zeros, ones):
+    # if not(isiterable(boost) or isiterable(chi)):
+    #     ones = 1
+    #     zeros = 0#np.zeros_like(boost)
+    # elif isiterable(chi):
+    #     ones = np.ones_like(chi)
+    #     zeros = np.zeros_like(chi)
+    # else:
+    #     zeros = 0
+    #     ones = 1
     gamma = 1 / np.sqrt(1 - boost**2) 
     coschi = np.cos(chi)
     sinchi = np.sin(chi)
-    lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, 0],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, 0],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, 0],[0,0,0,1]])
+    lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, zeros],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, zeros],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, zeros],[zeros,zeros,zeros,ones]])
     return lorentzboost
 
-def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, compute_V=False):
+def chi_evolution(rvec, delta_chi, alpha_chi):
+    return delta_chi*rvec**(-alpha_chi)
+
+def beta_evolution(rvec, alpha_beta):
+    return rvec**(-alpha_beta)
+
+def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, alpha_beta, delta_chi, alpha_chi, compute_V=False):
     """
     Given the r and phi coordinates impacted by photons, evaluate the all-space (that is, pre-envelope) emissivity model for
     Q, U, and V there.
     """
-
-    if fluid_eta is None:
-        fluid_eta = chi+np.pi
     bz = np.cos(iota)
     beq = np.sqrt(1-bz**2)
-    br = beq*np.cos(fluid_eta)
-    bphi = beq*np.sin(fluid_eta)
-    
-    bvec = np.array([br, bphi, bz])
+
+    rp = 1+np.sqrt(1-a**2)
+
     ivecs = []
     qvecs = []
     uvecs = []
@@ -142,9 +153,30 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         eta = etas[n]        
         npix = len(r)
         zeros = np.zeros_like(r)
+        ones = np.ones_like(r)
         #I realize how bad this looks, but computing everything here without using
         #helper functions helps minimize the number of array operations
 
+        # if delta_chi != 0:
+        chi_evol = chi_evolution(r, delta_chi, alpha_chi)
+        # else:
+            # chi_evol=0
+        # if alpha_beta != 0:
+        beta_evol = beta_evolution(r, alpha_beta)
+        # else:
+            # beta_evol = 1
+        sub_chi = chi+chi_evol
+        sub_boost = boost*beta_evol
+        # print(sub_boost)
+        # print(sub_chi)
+        if fluid_eta is None:
+            sub_fluid_eta = sub_chi+np.pi
+        br = beq*np.cos(sub_fluid_eta)
+        bphi = beq*np.sin(sub_fluid_eta)
+        if isiterable(br):
+            sub_bz = bz*ones
+        bvec = np.array([br, bphi, sub_bz])
+        
         rpowneg2 = 1/r**2
         rasqsum = r**2+a**2
         bigDelta = rasqsum-2*r
@@ -154,46 +186,6 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         littleomega = 2*a*r/bigXi
         rtbigR = np.sqrt(ralamnum**2 - bigDelta*(eta+(a-lam)**2))
         rtXiDelta = np.sqrt(bigXi/bigDelta)/r
-
-        # bigR = R(r, a, lam, eta)
-        # bigDelta = Delta(r, a)
-        # bigXi = Xi(r, a, np.pi/2)
-        # littleomega = omega(r, a, np.pi/2)
-
-
-
-
-
-        # def Delta(r, a):
-        #     return r**2 - 2*r + a**2
-
-        # def Xi(r, a, theta):
-        #     return (r**2+a**2)**2 - Delta(r, a)* a**2 * np.sin(theta)**2
-
-        # def omega(r, a, theta):
-        #     return 2*a*r/Xi(r, a, theta)
-
-        # def Sigma(r, a, theta):
-        #     return r**2 + a**2 * np.cos(theta)**2
-
-        # def R(r, a, lam, eta):
-        #     return (r**2 + a**2 - a*lam)**2 - Delta(r,a) * (eta + (a-lam)**2)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         #lowered
         pt_low = -1*np.ones_like(r)
@@ -217,7 +209,9 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         
         emutetrad = np.array([[rtXiDelta, zeros, zeros, littleomega*rtXiDelta], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
         emutetrad = np.transpose(emutetrad,(2,0,1))
-        boostmatrix = getlorentzboost(-boost, chi)
+        boostmatrix = getlorentzboost(-sub_boost, sub_chi, zeros, ones)
+        if len(boostmatrix.shape)>2:
+            boostmatrix = np.transpose(boostmatrix, (2,0,1))
         #fluid frame tetrad
         coordtransform = np.matmul(np.matmul(minkmetric, boostmatrix), emutetrad)
         coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
@@ -227,17 +221,20 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
         
         #fluid frame polarization
-        pspatialfluid = pupperfluid[:,1:]
-        fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
-        fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
-        fupperfluid = np.swapaxes(fupperfluid, 1,2)
+        pspatialfluid = np.squeeze(pupperfluid[:,1:])
+        fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1, axisb=0)
+        fupperfluid = np.insert(fupperfluid, 0, 0, axis=1)# / (np.linalg.norm(pupperfluid[1:]))
         if compute_V:
             vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
         else:
             vvec = zeros
+        fupperfluid = np.expand_dims(fupperfluid,axis=2)
         #apply the tetrad to get kerr f
+        # print(coordtransforminv.shape)
+        # print(fupperfluid.shape)
         kfuppers = np.matmul(coordtransforminv, fupperfluid)
-
+        # print(kfuppers[0])
+        # print(np.matmul(coordtransforminv[0],fupperfluid[0,:,0]))
 
         kft = kfuppers[:,0,0]
         kfr = kfuppers[:,1,0]
@@ -686,12 +683,12 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
 #want to disentangle ray-tracing quantities (mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac, axisymmetric)
 #from fluid properties (boost, chi, fluid_eta, iota)
 
-def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1, compute_V=False, axisymmetric=True):
+def kerr_exact(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, alpha_beta, delta_chi, alpha_chi, adap_fac = 1, compute_V=False, axisymmetric=True):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
     rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, nmin=0)
-    ivecs, qvecs, uvecs, vvecs, redshifts = emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, compute_V=compute_V)
+    ivecs, qvecs, uvecs, vvecs, redshifts = emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, alpha_beta, delta_chi, alpha_chi, compute_V=compute_V)
     if adap_fac > 1 and nmax > 0:
         newsize = adap_fac**2*int(np.sqrt(len(mudists)))**2
         for n in range(1,nmax+1):

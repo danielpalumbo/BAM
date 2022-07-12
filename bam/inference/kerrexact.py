@@ -709,3 +709,157 @@ def sub_in_adap(size, mask, vals):
     out = np.zeros(size)
     out[mask]=vals
     return out
+
+#this is a convenience for a particular pedagogical plot and not used in fitting
+def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, compute_V=False):
+    """
+    Given the r and phi coordinates impacted by photons, evaluate the all-space (that is, pre-envelope) emissivity model for
+    Q, U, and V there.
+    """
+
+    if fluid_eta is None:
+        fluid_eta = chi+np.pi
+    bz = np.cos(iota)
+    beq = np.sqrt(1-bz**2)
+    br = beq*np.cos(fluid_eta)
+    bphi = beq*np.sin(fluid_eta)
+    
+    bvec = np.array([br, bphi, bz])
+    ivecs = []
+    qvecs = []
+    uvecs = []
+    vvecs = []
+    redshifts = []
+    lps = []
+    for n in range(len(rvecs)):
+        r = rvecs[n]
+        phi = phivecs[n]
+        signpr = signprs[n]
+        signptheta = signpthetas[n]
+        alpha = alphas[n]
+        beta = betas[n]
+        lam = lams[n]
+        eta = etas[n]        
+        npix = len(r)
+        zeros = np.zeros_like(r)
+        #I realize how bad this looks, but computing everything here without using
+        #helper functions helps minimize the number of array operations
+
+        rpowneg2 = 1/r**2
+        rasqsum = r**2+a**2
+        bigDelta = rasqsum-2*r
+        ralamnum = rasqsum - a*lam
+        ralamnumdDelta = ralamnum/bigDelta
+        bigXi = rasqsum**2 - bigDelta * a**2 #note Xi is being evaluated at theta = pi/2
+        littleomega = 2*a*r/bigXi
+        rtbigR = np.sqrt(ralamnum**2 - bigDelta*(eta+(a-lam)**2))
+        rtXiDelta = np.sqrt(bigXi/bigDelta)/r
+
+
+        #lowered
+        pt_low = -1*np.ones_like(r)
+        pr_low = signpr * rtbigR/bigDelta
+
+        # pr_low[pr_low>10] = 10
+        # pr_low[pr_low<-10] = -10
+        pphi_low = lam
+        ptheta_low = signptheta*np.sqrt(eta)
+        plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
+    
+        #raised
+        pt = rpowneg2 * (-a*(a-lam) + rasqsum * ralamnumdDelta)
+        pr = signpr * rpowneg2 * rtbigR
+        pphi = rpowneg2 * (-(a-lam)+a*ralamnumdDelta)
+        ptheta = signptheta*np.sqrt(eta) *rpowneg2
+
+
+        # praised.append([pt_up, pr_up, pphi_up, ptheta_up])
+        #now everything to generate polarization
+        
+        emutetrad = np.array([[rtXiDelta, zeros, zeros, littleomega*rtXiDelta], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
+        emutetrad = np.transpose(emutetrad,(2,0,1))
+        boostmatrix = getlorentzboost(-boost, chi)
+        #fluid frame tetrad
+        coordtransform = np.matmul(np.matmul(minkmetric, boostmatrix), emutetrad)
+        coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
+        rs = r
+        pupperfluid = np.matmul(coordtransform, plowers)
+        redshift = 1 / (pupperfluid[:,0,0])
+        lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
+        lp = np.real(np.nan_to_num(lp))
+
+        lps.append(lp)
+        #fluid frame polarization
+        pspatialfluid = pupperfluid[:,1:]
+        fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
+        fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
+        fupperfluid = np.swapaxes(fupperfluid, 1,2)
+        if compute_V:
+            vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
+        else:
+            vvec = zeros
+        #apply the tetrad to get kerr f
+        kfuppers = np.matmul(coordtransforminv, fupperfluid)
+
+
+        kft = kfuppers[:,0,0]
+        kfr = kfuppers[:,1,0]
+        kftheta = kfuppers[:,2,0]
+        kfphi = kfuppers[:, 3,0]
+        spin = a
+        #kappa1 and kappa2
+        prekappa1 = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
+        prekappa2 = rasqsum * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
+        kappa1 = rs * prekappa1
+        kappa2 = -rs * prekappa2
+        # kappa1 = np.clip(np.real(kappa1), -20, 20)
+        
+        #screen appearance
+        nu = -(alpha + spin * np.sin(inc))
+
+        norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)
+        ealpha = (beta * kappa2 - nu * kappa1) / norm
+        ebeta = (beta * kappa1 + nu * kappa2) / norm
+
+        qvec = -(ealpha**2 - ebeta**2)
+        uvec = -2*ealpha*ebeta
+        
+        # qvec *= lp
+        # uvec *= lp
+        qvec = np.real(np.nan_to_num(qvec))
+        uvec = np.real(np.nan_to_num(uvec))
+        if compute_V:
+            vvec = np.real(np.nan_to_num(vvec))
+        redshift = np.real(np.nan_to_num(redshift))
+        ivec = np.sqrt(qvec**2+uvec**2)
+
+        ivecs.append(ivec)
+        qvecs.append(qvec)
+        uvecs.append(uvec)
+        vvecs.append(vvec)
+        redshifts.append(redshift)
+
+    return ivecs, qvecs, uvecs, vvecs, redshifts, lps
+
+
+
+
+def kerr_exact_sep_lp(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1, compute_V=False, axisymmetric=True):
+    """
+    Numerical: get rs from rho, varphi, inc, a, and subimage index n.
+    """
+    rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, nmin=0)
+    ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, compute_V=compute_V)
+    if adap_fac > 1 and nmax > 0:
+        newsize = adap_fac**2*int(np.sqrt(len(mudists)))**2
+        for n in range(1,nmax+1):
+            rvecs[n] = sub_in_adap(newsize, adap_masks[n], rvecs[n])
+            phivecs[n] = sub_in_adap(newsize, adap_masks[n], phivecs[n])
+            ivecs[n] = sub_in_adap(newsize, adap_masks[n], ivecs[n])
+            qvecs[n] = sub_in_adap(newsize, adap_masks[n], qvecs[n])
+            uvecs[n] = sub_in_adap(newsize, adap_masks[n], uvecs[n])
+            vvecs[n] = sub_in_adap(newsize, adap_masks[n], vvecs[n])
+            redshifts[n] = sub_in_adap(newsize, adap_masks[n], redshifts[n])
+            lps[n] = sub_in_adap(newsize, adap_masks[n], lps[n])
+    
+    return rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps

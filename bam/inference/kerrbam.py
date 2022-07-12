@@ -12,7 +12,7 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
-from bam.inference.kerrexact import kerr_exact#, build_all_interpolators, Delta, R, Xi, omega, Sigma, getlorentzboost
+from bam.inference.kerrexact import kerr_exact, kerr_exact_sep_lp
 from scipy.special import ive
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
@@ -149,7 +149,9 @@ class KerrBam:
         
         #convert rho_uas to gravitational units
         # rhovec = self.rho_uas/MoDuas
-        return kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
+        return kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
+
+
 
     def compute_image(self, imparams):
         """

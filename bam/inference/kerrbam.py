@@ -259,6 +259,63 @@ class KerrBam:
             params.append(fbam.all_param_dict[name])
         return self.recent_loglike(params)
     
+    def build_nxcorr(self, im):
+        """
+        Given an observation and a list of data product names, 
+        return a likelihood function that accounts for each contribution. 
+        """
+
+        def nxcorr(params):
+            to_eval = self.build_eval(params)
+
+            imparams = [to_eval[ipn] for ipn in self.imparam_names]
+            ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)
+            out = 0.
+            ivec = np.sum(ivecs,axis=0)
+            qvec = np.sum(qvecs,axis=0)
+            uvec = np.sum(uvecs,axis=0)
+            vvec = np.sum(vvecs,axis=0)
+
+            self.modelim.ivec = ivec
+            self.modelim.qvec = qvec
+            self.modelim.uvec = uvec
+            self.modelim_vvec = vvec
+            # self.modelim.pa = to_eval['PA']
+            
+            return im.compare_images(self.modelim.rotate(to_eval['PA']),metric='nxcorr')[0][0]
+
+        print("Built nxcorr function!")
+        self.nxcorr = nxcorr
+        return nxcorr
+
+    def build_nrmse(self, im):
+        """
+        Given an observation and a list of data product names, 
+        return a likelihood function that accounts for each contribution. 
+        """
+
+        def nrmse(params):
+            to_eval = self.build_eval(params)
+
+            imparams = [to_eval[ipn] for ipn in self.imparam_names]
+            ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)
+            out = 0.
+            ivec = np.sum(ivecs,axis=0)
+            qvec = np.sum(qvecs,axis=0)
+            uvec = np.sum(uvecs,axis=0)
+            vvec = np.sum(vvecs,axis=0)
+
+            self.modelim.ivec = ivec
+            self.modelim.qvec = qvec
+            self.modelim.uvec = uvec
+            self.modelim_vvec = vvec
+            # self.modelim.pa = to_eval['PA']
+            
+            return im.compare_images(self.modelim.rotate(to_eval['PA']),metric='nrmse')[0][0]
+
+        print("Built nxcorr function!")
+        self.nrmse = nrmse
+        return nrmse
 
     def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True):
         """
@@ -479,6 +536,37 @@ class KerrBam:
         new.modelim = new.make_image(modelim=True)
         return new, res
         
+    def annealing_nxcorr_MAP(self, im, args=(), maxiter=1000,local_search_options={},initial_temp=5230.0):
+        """
+        Given an image, find the nxcorr MAP using scipy's dual annealing.
+        """
+        self.source = im.source
+        self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=im.ra, dec=im.dec, rf= im.rf, mjd = im.mjd, source=im.source)#, pulse=deltaPulse2D)
+        nn = self.build_nxcorr(im)
+        print("Running dual annealing...")
+        res =  dual_annealing(lambda x: -nn(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)
+        print("Done!")
+
+        to_eval = self.build_eval(res.x)
+        new = self.KerrBam_from_eval(to_eval)
+        new.modelim = new.make_image(modelim=True)
+        return new, res
+
+    def annealing_nrmse_MAP(self, im, args=(), maxiter=1000,local_search_options={},initial_temp=5230.0):
+        """
+        Given an image, find the nxcorr MAP using scipy's dual annealing.
+        """
+        self.source = im.source
+        self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=im.ra, dec=im.dec, rf= im.rf, mjd = im.mjd, source=im.source)#, pulse=deltaPulse2D)
+        nn = self.build_nrmse(im)
+        print("Running dual annealing...")
+        res =  dual_annealing(lambda x: nn(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)
+        print("Done!")
+
+        to_eval = self.build_eval(res.x)
+        new = self.KerrBam_from_eval(to_eval)
+        new.modelim = new.make_image(modelim=True)
+        return new, res
 
     def build_prior_transform(self):
         functions = [get_uniform_transform(bounds[0],bounds[1]) for bounds in self.modeled_params]

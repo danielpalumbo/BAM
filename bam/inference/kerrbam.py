@@ -166,18 +166,36 @@ class KerrBam:
         
         #convert rho_uas to gravitational units
         rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
-            
-        for n in range(self.nmax+1):
+        
+        if self.optical_depth == 'varying' or self.optical_depth == 'thick':
+            rvecs = rescale_veclist(rvecs)
+            if not self.axisymmetric:
+                phivecs = rescale_veclist(phivecs)
+            redshifts = rescale_veclist(redshifts)
+            lps = rescale_veclist(lps)
+            ivecs = rescale_veclist(ivecs)
+            qvecs = rescale_veclist(qvecs)
+            uvecs = rescale_veclist(uvecs)
+            vvecs = rescale_veclist(vvecs)
+        for n in reversed(range(self.nmax+1)):
             if self.axisymmetric:
                 jfunc_vals = self.jfunc(rvecs[n], jargs) 
-                profile = jfunc_vals * redshifts[n]**(3+spec)
             else:
                 jfunc_vals = self.jfunc(rvecs[n],phivecs[n],jargs)
-                profile = jfunc_vals*redshifts[n]**(3+spec)
+
+            profile = jfunc_vals*redshifts[n]**(3+spec)
+
             if self.optical_depth == 'thin':
                 profile = profile * lps[n]
             elif self.optical_depth == 'varying':
-                profile = profile * (1-np.exp(-jfunc_vals*h*lps[n]))
+                tau = jfunc_vals*h*lps[n]
+                exptau = np.exp(-tau)
+                profile = profile * (1-exptau)
+                if n < self.nmax:
+                    ivecs[n+1] *= exptau
+                    qvecs[n+1] *= exptau
+                    uvecs[n+1] *= exptau
+                    vvecs[n+1] *= exptau
             elif self.optical_depth == 'thick':
                 #this is the optically thick case, where h is a constant
                 pass
@@ -194,10 +212,11 @@ class KerrBam:
                 qvecs[n] = ivecs[n]*0
                 uvecs[n] = ivecs[n]*0
                 vvecs[n] = ivecs[n]*0
-        ivecs = rescale_veclist(ivecs)
-        qvecs = rescale_veclist(qvecs)
-        uvecs = rescale_veclist(uvecs)
-        vvecs = rescale_veclist(vvecs)
+        if self.optical_depth == 'thin':
+            ivecs = rescale_veclist(ivecs)
+            qvecs = rescale_veclist(qvecs)
+            uvecs = rescale_veclist(uvecs)
+            vvecs = rescale_veclist(vvecs)
         tf = np.sum(ivecs)
         ivecs = [ivec*zbl/tf for ivec in ivecs]
         qvecs = [qvec*zbl/tf for qvec in qvecs]

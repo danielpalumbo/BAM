@@ -31,7 +31,8 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., h = 1, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin'):
+        self.optical_depth = optical_depth
         self.axisymmetric=axisymmetric
         self.periodic=periodic
         self.dynamic=False
@@ -58,6 +59,7 @@ class KerrBam:
         self.eta = eta
         self.iota = iota
         self.spec = spec
+        self.h = h
         self.f = f
         self.e = e
         self.var_a = var_a
@@ -87,8 +89,8 @@ class KerrBam:
             mode = 'fixed' 
         self.mode = mode
         self.noise_param_names = ['f','e','var_a','var_b','var_c','var_u0']
-        self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, f, e, var_a, var_b, var_c, var_u0]+jargs
-        self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','f','e','var_a','var_b','var_c','var_u0']+jarg_names
+        self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, h, f, e, var_a, var_b, var_c, var_u0]+jargs
+        self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','h','f','e','var_a','var_b','var_c','var_u0']+jarg_names
         self.imparam_names = [i for i in self.all_names if i not in self.noise_param_names+jarg_names]
         self.imparam_names = self.imparam_names + ['jargs']
         self.all_param_dict = dict()
@@ -116,7 +118,7 @@ class KerrBam:
         self.model_dim = len(self.modeled_names)
 
         if self.mode == 'fixed':
-            self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.jargs]
+            self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.h, self.jargs]
             self.rhovec = self.rho_uas / self.MoDuas
             # self.rhovec = D/(M*Mscale*Gpercsq*self.rho_uas)
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
@@ -144,7 +146,7 @@ class KerrBam:
             print("Can't directly evaluate kerr_exact in model mode!")
             return
 
-        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, jargs = self.imparams
+        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, h, jargs = self.imparams
 
         
         #convert rho_uas to gravitational units
@@ -159,17 +161,29 @@ class KerrBam:
         compute the resulting qvec, uvec, ivec, rotimxvec, and rotimyvec.
         """
         # print(imparams)
-        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, jargs = imparams
+        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, h, jargs = imparams
 
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts = kerr_exact(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
+        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
             
         for n in range(self.nmax+1):
             if self.axisymmetric:
-                profile = self.jfunc(rvecs[n], jargs) * redshifts[n]**(3+spec)
+                jfunc_vals = self.jfunc(rvecs[n], jargs) 
+                profile = jfunc_vals * redshifts[n]**(3+spec)
             else:
-                profile = self.jfunc(rvecs[n],phivecs[n],jargs)*redshifts[n]**(3+spec)
+                jfunc_vals = self.jfunc(rvecs[n],phivecs[n],jargs)
+                profile = jfunc_vals*redshifts[n]**(3+spec)
+            if self.optical_depth == 'thin':
+                profile = profile * lps[n]
+            elif self.optical_depth == 'varying':
+                profile = profile * (1-np.exp(-jfunc_vals*h*lps[n]))
+            elif self.optical_depth == 'thick':
+                #this is the optically thick case, where h is a constant
+                pass
+            else:
+                print("Unrecognized optical depth prescription! Defaulting to optically thick.")
+                
             if self.polflux:
                 ivecs[n]*=profile
                 qvecs[n]*=profile
@@ -515,7 +529,7 @@ class KerrBam:
 
 
     def KerrBam_from_eval(self, to_eval):
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], h = to_eval['h'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac)
         return new
 
     def annealing_MAP(self, obs, data_types=['vis'], ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True):

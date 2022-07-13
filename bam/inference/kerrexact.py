@@ -710,7 +710,6 @@ def sub_in_adap(size, mask, vals):
     out[mask]=vals
     return out
 
-#this is a convenience for a particular pedagogical plot and not used in fitting
 def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, compute_V=False):
     """
     Given the r and phi coordinates impacted by photons, evaluate the all-space (that is, pre-envelope) emissivity model for

@@ -31,7 +31,9 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., h = 1, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin'):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., h = 1, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=False,compute_V=False):
+        self.compute_P = compute_P
+        self.compute_V = compute_V
         self.optical_depth = optical_depth
         self.axisymmetric=axisymmetric
         self.periodic=periodic
@@ -151,7 +153,7 @@ class KerrBam:
         
         #convert rho_uas to gravitational units
         # rhovec = self.rho_uas/MoDuas
-        return kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
+        return kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)        
 
 
 
@@ -165,7 +167,8 @@ class KerrBam:
 
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric)        
+        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
+
         
         if self.optical_depth == 'varying' or self.optical_depth == 'thick':
             rvecs = rescale_veclist(rvecs)
@@ -174,9 +177,11 @@ class KerrBam:
             redshifts = rescale_veclist(redshifts)
             lps = rescale_veclist(lps)
             ivecs = rescale_veclist(ivecs)
-            qvecs = rescale_veclist(qvecs)
-            uvecs = rescale_veclist(uvecs)
-            vvecs = rescale_veclist(vvecs)
+            if self.compute_P:
+                qvecs = rescale_veclist(qvecs)
+                uvecs = rescale_veclist(uvecs)
+            if self.compute_V:
+                vvecs = rescale_veclist(vvecs)
         for n in reversed(range(self.nmax+1)):
             if self.axisymmetric:
                 jfunc_vals = self.jfunc(rvecs[n], jargs) 
@@ -188,14 +193,16 @@ class KerrBam:
             if self.optical_depth == 'thin':
                 profile = profile * lps[n]
             elif self.optical_depth == 'varying':
-                tau = jfunc_vals*h*lps[n]
+                tau = h*lps[n]
                 exptau = np.exp(-tau)
                 profile = profile * (1-exptau)
                 if n < self.nmax:
                     ivecs[n+1] *= exptau
-                    qvecs[n+1] *= exptau
-                    uvecs[n+1] *= exptau
-                    vvecs[n+1] *= exptau
+                    if self.compute_P:
+                        qvecs[n+1] *= exptau
+                        uvecs[n+1] *= exptau
+                    if self.compute_V:
+                        vvecs[n+1] *= exptau
             elif self.optical_depth == 'thick':
                 #this is the optically thick case, where h is a constant
                 pass
@@ -204,14 +211,17 @@ class KerrBam:
                 
             if self.polflux:
                 ivecs[n]*=profile
-                qvecs[n]*=profile
-                uvecs[n]*=profile
-                vvecs[n]*=profile
             else:
                 ivecs[n] = profile
                 qvecs[n] = ivecs[n]*0
                 uvecs[n] = ivecs[n]*0
                 vvecs[n] = ivecs[n]*0
+            if self.compute_P:
+                qvecs[n]*=profile
+                uvecs[n]*=profile
+            if self.compute_V:
+                vvecs[n]*=profile
+
         if self.optical_depth == 'thin':
             ivecs = rescale_veclist(ivecs)
             qvecs = rescale_veclist(qvecs)
@@ -730,14 +740,29 @@ class KerrBam:
 
         if n =='all':
             ivec = np.sum(self.ivecs,axis=0)
-            qvec = np.sum(self.qvecs,axis=0)
-            uvec = np.sum(self.uvecs,axis=0)
-            vvec = np.sum(self.vvecs,axis=0)
+            if self.compute_P:
+                qvec = np.sum(self.qvecs,axis=0)
+                uvec = np.sum(self.uvecs,axis=0)
+            else:
+                qvec = 0*ivec
+                uvec = 0*ivec
+            if self.compute_V:
+                vvec = np.sum(self.vvecs,axis=0)
+            else:
+                vvec = 0*ivec
         elif type(n) is int:
             ivec = self.ivecs[n]
-            qvec = self.qvecs[n]
-            uvec = self.uvecs[n]
-            vvec = self.vvecs[n]
+            if self.compute_P:
+                qvec = self.qvecs[n]
+                uvec = self.uvecs[n]
+            else:
+                qvec = 0*ivec
+                uvec = 0*ivec
+            if self.compute_V:
+                vvec = self.vvecs[n]
+            else:
+                vvec = 0*ivec
+        
         im = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
         im.ivec = ivec
         im.qvec = qvec

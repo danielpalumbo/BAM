@@ -315,10 +315,16 @@ class KerrBam:
             ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)
             out = 0.
             ivec = np.sum(ivecs,axis=0)
-            qvec = np.sum(qvecs,axis=0)
-            uvec = np.sum(uvecs,axis=0)
-            vvec = np.sum(vvecs,axis=0)
-
+            if self.compute_P:
+                qvec = np.sum(qvecs,axis=0)
+                uvec = np.sum(uvecs,axis=0)
+            else:
+                qvec = ivec*0
+                uvec = ivec*0
+            if self.compute_V:
+                vvec = np.sum(vvecs,axis=0)
+            else:
+                vvec = ivec*0
             self.modelim.ivec = ivec
             self.modelim.qvec = qvec
             self.modelim.uvec = uvec

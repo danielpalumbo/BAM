@@ -319,12 +319,12 @@ class KerrBam:
                 qvec = np.sum(qvecs,axis=0)
                 uvec = np.sum(uvecs,axis=0)
             else:
-                qvec = ivec*0
-                uvec = ivec*0
+                qvec = np.zeros_like(ivec)
+                uvec = np.zeros_like(ivec)
             if self.compute_V:
                 vvec = np.sum(vvecs,axis=0)
             else:
-                vvec = ivec*0
+                vvec = np.zeros_like(ivec)
             self.modelim.ivec = ivec
             self.modelim.qvec = qvec
             self.modelim.uvec = uvec
@@ -462,10 +462,16 @@ class KerrBam:
             ivecs, qvecs, uvecs, vvecs = self.compute_image(imparams)
             out = 0.
             ivec = np.sum(ivecs,axis=0)
-            qvec = np.sum(qvecs,axis=0)
-            uvec = np.sum(uvecs,axis=0)
-            vvec = np.sum(vvecs,axis=0)
-
+            if self.compute_P:
+                qvec = np.sum(qvecs,axis=0)
+                uvec = np.sum(uvecs,axis=0)
+            else:
+                qvec = np.zeros_like(ivec)
+                uvec = np.zeros_like(ivec)
+            if self.compute_V:
+                vvec = np.sum(vvecs,axis=0)
+            else:
+                vvec = np.zeros_like(ivec)
             self.modelim.ivec = ivec
             self.modelim.qvec = qvec
             self.modelim.uvec = uvec
@@ -750,24 +756,24 @@ class KerrBam:
                 qvec = np.sum(self.qvecs,axis=0)
                 uvec = np.sum(self.uvecs,axis=0)
             else:
-                qvec = 0*ivec
-                uvec = 0*ivec
+                qvec = np.zeros_like(ivec)
+                uvec = np.zeros_like(ivec)
             if self.compute_V:
                 vvec = np.sum(self.vvecs,axis=0)
             else:
-                vvec = 0*ivec
+                vvec = np.zeros_like(ivec)
         elif type(n) is int:
             ivec = self.ivecs[n]
             if self.compute_P:
                 qvec = self.qvecs[n]
                 uvec = self.uvecs[n]
             else:
-                qvec = 0*ivec
-                uvec = 0*ivec
+                qvec = np.zeros_like(ivec)
+                uvec = np.zeros_like(ivec)
             if self.compute_V:
                 vvec = self.vvecs[n]
             else:
-                vvec = 0*ivec
+                vvec = np.zeros_like(ivec)
         
         im = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
         im.ivec = ivec

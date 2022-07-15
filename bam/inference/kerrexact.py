@@ -228,6 +228,8 @@ def emissivity_model(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, 
         
         #fluid frame polarization
         pspatialfluid = pupperfluid[:,1:]
+        
+
         fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
         fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
         fupperfluid = np.swapaxes(fupperfluid, 1,2)
@@ -710,7 +712,7 @@ def sub_in_adap(size, mask, vals):
     out[mask]=vals
     return out
 
-def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, compute_V=False):
+def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, compute_V=False):
     """
     Given the r and phi coordinates impacted by photons, evaluate the all-space (that is, pre-envelope) emissivity model for
     Q, U, and V there.
@@ -790,11 +792,22 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         lps.append(lp)
         #fluid frame polarization
         pspatialfluid = pupperfluid[:,1:]
+        # print(pspatialfluid)
+        # print(pspatialfluid.shape)
+        # pspatialnorm = np.sqrt(np.sum(pspatialfluid[:,:,0]**2,axis=1))
         fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
+        # fupcopy = fupperfluid.copy()
+        fupperfluid[:,0,0] = fupperfluid[:,0,0] *redshift#/ pspatialnorm#would normally be a bmag here
+        fupperfluid[:,0,1] = fupperfluid[:,0,1] *redshift#/ pspatialnorm
+        fupperfluid[:,0,2] = fupperfluid[:,0,2] *redshift#/ pspatialnorm
+        sinzeta = np.sqrt(np.sum(fupperfluid[:,0,:]**2,axis=1))
+        # print(fupperfluid.shape)
+        # fupperfluid = fupperfluid / pspatialnorm
+        # print(pupperfluid[:,0,0]-pspatialnorm)
         fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
         fupperfluid = np.swapaxes(fupperfluid, 1,2)
         if compute_V:
-            vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]
+            vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]/pspatialnorm
         else:
             vvec = zeros
         #apply the tetrad to get kerr f
@@ -817,8 +830,8 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         nu = -(alpha + spin * np.sin(inc))
 
         norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)
-        ealpha = (beta * kappa2 - nu * kappa1) / norm
-        ebeta = (beta * kappa1 + nu * kappa2) / norm
+        ealpha = (beta * kappa2 - nu * kappa1) / norm * sinzeta**((spec-1)/2)
+        ebeta = (beta * kappa1 + nu * kappa2) / norm * sinzeta**((spec-1)/2)
 
         qvec = -(ealpha**2 - ebeta**2)
         uvec = -2*ealpha*ebeta
@@ -843,12 +856,12 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
 
 
 
-def kerr_exact_sep_lp(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, adap_fac = 1, compute_V=False, axisymmetric=True):
+def kerr_exact_sep_lp(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, adap_fac = 1, compute_V=False, axisymmetric=True):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
     rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, nmin=0)
-    ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, compute_V=compute_V)
+    ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, compute_V=compute_V)
     if adap_fac > 1 and nmax > 0:
         newsize = adap_fac**2*int(np.sqrt(len(mudists)))**2
         for n in range(1,nmax+1):

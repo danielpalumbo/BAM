@@ -646,8 +646,8 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         nu = -(alpha + spin * np.sin(inc))
 
         norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)
-        ealpha = (beta * kappa2 - nu * kappa1) / norm * sinzeta**((alpha_zeta-1)/2)
-        ebeta = (beta * kappa1 + nu * kappa2) / norm * sinzeta**((alpha_zeta-1)/2)
+        ealpha = (beta * kappa2 - nu * kappa1) / norm * sinzeta**((alpha_zeta+1)/2)
+        ebeta = (beta * kappa1 + nu * kappa2) / norm * sinzeta**((alpha_zeta+1)/2)
 
         qvec = -(ealpha**2 - ebeta**2)
         uvec = -2*ealpha*ebeta

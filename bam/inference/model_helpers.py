@@ -18,7 +18,7 @@ SgrA_dist = 8*3.086e19
 from skimage.transform import rescale, resize
 
 
-def rescale_veclist(veclist):
+def rescale_veclist(veclist,mode='edge',order=1,anti_aliasing=True):
     """
     Given a list of flattened arrays which are
     ordered by size, use the last array to rescale all
@@ -29,7 +29,7 @@ def rescale_veclist(veclist):
     outlist = []
     for i in range(len(veclist)-1):
         subxdim = int(np.sqrt(len(veclist[i])))
-        outlist.append(resize(veclist[i].reshape((subxdim,subxdim)), (xdim,xdim), mode='edge', order=1).flatten())
+        outlist.append(resize(veclist[i].reshape((subxdim,subxdim)), (xdim,xdim), mode=mode, order=order,anti_aliasing=anti_aliasing).flatten())
     outlist.append(ref)
     return outlist
 

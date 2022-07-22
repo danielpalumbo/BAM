@@ -503,7 +503,6 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
             
             sub_rvecs, sub_phivecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, _ = ray_trace_all(submudists, fov_uas, MoDuas, subvarphi, inc, a, n, axisymmetric=axisymmetric, nmin=n, adap_fac=1)
             
-
             all_rvecs[ni]=sub_rvecs[0].flatten()
             all_phivecs[ni]=sub_phivecs[0].flatten()
             all_signprs[ni]=sub_signprs[0].flatten()
@@ -549,6 +548,7 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
     redshifts = []
     lps = []
     for n in range(len(rvecs)):
+
         r = rvecs[n]
         phi = phivecs[n]
         signpr = signprs[n]
@@ -561,7 +561,8 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         zeros = np.zeros_like(r)
         #I realize how bad this looks, but computing everything here without using
         #helper functions helps minimize the number of array operations
-
+        
+        rteta = np.sqrt(eta)
         rpowneg2 = 1/r**2
         rasqsum = r**2+a**2
         bigDelta = rasqsum-2*r
@@ -571,8 +572,7 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         littleomega = 2*a*r/bigXi
         rtbigR = np.sqrt(ralamnum**2 - bigDelta*(eta+(a-lam)**2))
         rtXiDelta = np.sqrt(bigXi/bigDelta)/r
-
-
+        
         #lowered
         pt_low = -1*np.ones_like(r)
         pr_low = signpr * rtbigR/bigDelta
@@ -580,15 +580,17 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         # pr_low[pr_low>10] = 10
         # pr_low[pr_low<-10] = -10
         pphi_low = lam
-        ptheta_low = signptheta*np.sqrt(eta)
-        plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
-    
+        ptheta_low = signptheta*rteta
+
+        prep = np.array([pt_low,pr_low,ptheta_low,pphi_low])
+        plowers = np.expand_dims(np.transpose(prep),2)
+        # plowers = np.array(np.hsplit(np.array([pt_low, pr_low, ptheta_low, pphi_low]),npix))
+
         #raised
         pt = rpowneg2 * (-a*(a-lam) + rasqsum * ralamnumdDelta)
         pr = signpr * rpowneg2 * rtbigR
         pphi = rpowneg2 * (-(a-lam)+a*ralamnumdDelta)
-        ptheta = signptheta*np.sqrt(eta) *rpowneg2
-
+        ptheta = signptheta*rteta *rpowneg2
 
         # praised.append([pt_up, pr_up, pphi_up, ptheta_up])
         #now everything to generate polarization
@@ -604,8 +606,8 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         redshift = 1 / (pupperfluid[:,0,0])
         lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
         lp = np.real(np.nan_to_num(lp))
-
         lps.append(lp)
+
         #fluid frame polarization
         pspatialfluid = pupperfluid[:,1:]
         # print(pspatialfluid)
@@ -622,6 +624,7 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         # print(pupperfluid[:,0,0]-pspatialnorm)
         fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
         fupperfluid = np.swapaxes(fupperfluid, 1,2)
+
         if compute_V:
             vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]/pspatialnorm
         else:
@@ -645,9 +648,9 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         #screen appearance
         nu = -(alpha + spin * np.sin(inc))
 
-        norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)
-        ealpha = (beta * kappa2 - nu * kappa1) / norm * sinzeta**((alpha_zeta+1)/2)
-        ebeta = (beta * kappa1 + nu * kappa2) / norm * sinzeta**((alpha_zeta+1)/2)
+        norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)/sinzeta**((alpha_zeta+1)/2)
+        ealpha = (beta * kappa2 - nu * kappa1) / norm  
+        ebeta = (beta * kappa1 + nu * kappa2) / norm 
 
         qvec = -(ealpha**2 - ebeta**2)
         uvec = -2*ealpha*ebeta
@@ -660,13 +663,13 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
             vvec = np.real(np.nan_to_num(vvec))
         redshift = np.real(np.nan_to_num(redshift))
         ivec = np.sqrt(qvec**2+uvec**2)
-
         ivecs.append(ivec)
         qvecs.append(qvec)
         uvecs.append(uvec)
         vvecs.append(vvec)
         redshifts.append(redshift)
 
+    
     return ivecs, qvecs, uvecs, vvecs, redshifts, lps
 
 
@@ -689,5 +692,5 @@ def kerr_exact_sep_lp(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi
             vvecs[n] = sub_in_adap(newsize, adap_masks[n], vvecs[n])
             redshifts[n] = sub_in_adap(newsize, adap_masks[n], redshifts[n])
             lps[n] = sub_in_adap(newsize, adap_masks[n], lps[n])
-    
+
     return rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps

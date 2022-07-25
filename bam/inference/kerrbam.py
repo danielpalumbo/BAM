@@ -104,7 +104,7 @@ class KerrBam:
 
         self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
         self.modeled_names = [self.all_names[i] for i in self.modeled_indices]
-        self.error_modeling = np.any(np.array([i in self.modeled_names for i in ['f','e','var_a','var_b','var_c','var_u0']]))
+        self.error_modeling = np.any(np.array([i in self.modeled_names for i in ['f','e','var_a','var_b','var_c','var_u0']])) or self.f != 0. or self.e != 0.
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
         self.modeled_param_dict = dict()
         for i in range(len(self.modeled_names)):

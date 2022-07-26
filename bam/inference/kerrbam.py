@@ -15,6 +15,8 @@ from scipy.optimize import dual_annealing
 from bam.inference.kerrexact import kerr_exact_sep_lp
 from scipy.special import ive
 import time
+from ehtim.plotting.summary_plots import imgsum
+from ehtim.calibrating.self_cal import self_cal
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # from ehtim.observing.pulses import deltaPulse2D
@@ -889,4 +891,23 @@ class KerrBam:
         amp_chisq = self.amp_chisq(chisq_obs, debias=debias)
         vis_chisq = self.vis_chisq(chisq_obs)
         return {'logcamp':logcamp_chisq,'cphase':cphase_chisq,'vis':vis_chisq,'amp':amp_chisq}
+
+    def fitsum(self, obs, outname, outdir='.', title='imgsum', commentstr="", debias=True):
+        """
+        In fixed mode, given the observation that was fit, produce a self-called observation
+         and then pass it to the eht-imaging imgsum utility. 
+        Note that sys err needs to be done manually due to allow general noise modeling.
+        """
+        if self.mode !='fixed':
+            print("Can only produce fitsums from fixed model!")
+            return
+        im = self.make_rotated_image()
+        new_obs = obs.copy()
+        obsdata = new_obs.unpack(['amp','uvdist'], conj=False,debias=debias)
+        print("If you have specified any systematic error, it is being included in the chisq calculations.")
+        new_obs.data['sigma'] = (new_obs.data['sigma']**2+(obsdata['amp']*self.f)**2+(self.e)**2 + self.eval_var_sys(obsdata['uvdist']))**0.5
+        im.rf = new_obs.rf
+        cal_obs = self_cal(new_obs,im,ttype='nfft')
+        # cal_obs = self.observe_same(new_obs,ampcal=True,phasecal=True,add_th_noise=False, seed=4)        
+        imgsum(im,cal_obs,new_obs,outname,outdir=outdir,title=title,commentstr=commentstr,debias=debias)
 

@@ -575,7 +575,7 @@ class KerrBam:
         new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], alpha_zeta=to_eval['alpha_zeta'], h = to_eval['h'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac, interp_order=self.interp_order)
         return new
 
-    def annealing_MAP(self, obs, data_types=['vis'], ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True):
+    def annealing_MAP(self, obs, data_types=['vis'], x0 = None, ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True, seed = 4):
         """
         Given an observation and a list of data product names, 
         find the MAP using scipy's dual annealing.
@@ -585,7 +585,7 @@ class KerrBam:
         ll = self.build_likelihood(obs, data_types=data_types,ttype=ttype, debias=debias)
         
         print("Running dual annealing...")
-        res =  dual_annealing(lambda x: -ll(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp)
+        res =  dual_annealing(lambda x: -ll(x), self.modeled_params, args=args, maxiter=maxiter, local_search_options=local_search_options, initial_temp=initial_temp, x0=x0,seed=seed)
         print("Done!")
 
         to_eval = self.build_eval(res.x)
@@ -593,7 +593,7 @@ class KerrBam:
         new.modelim = new.make_image(modelim=True)
         return new, res
         
-    def annealing_nxcorr_MAP(self, im, args=(), maxiter=1000,local_search_options={},initial_temp=5230.0):
+    def annealing_nxcorr_MAP(self, im, args=(),  x0 = None,maxiter=1000,local_search_options={},initial_temp=5230.0, seed = 4):
         """
         Given an image, find the nxcorr MAP using scipy's dual annealing.
         """

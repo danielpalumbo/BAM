@@ -41,7 +41,6 @@ class KerrBam:
         self.optical_depth = optical_depth
         self.axisymmetric=axisymmetric
         self.periodic=periodic
-        self.dynamic=False
         self.source = source
         self.polflux = polflux
         self.fov = fov
@@ -639,31 +638,24 @@ class KerrBam:
         return ptform
 
     
-    def build_sampler(self, loglike, ptform, dynamic=False, nlive=1000, bound='multi', sample='auto', pool=None, queue_size=None):
-        self.dynamic=dynamic
-        if dynamic:
-            sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, sample=sample, pool=pool, queue_size=queue_size)
-        else:
-            sampler = dynesty.NestedSampler(loglike, ptform, self.model_dim, periodic=self.periodic_indices, bound=bound, nlive=nlive, sample=sample, pool=pool, queue_size=queue_size)
+    def build_sampler(self, loglike, ptform, bound='multi', sample='auto', pool=None, queue_size=None):
+        sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
         self.recent_sampler=sampler
         return sampler
 
-    def setup(self, obs, data_types=['vis'],dynamic=False, nlive=1000, bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None):
+    def setup(self, obs, data_types=['vis'], bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None):
         self.source = obs.source
         self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
         loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias)
-        sampler = self.build_sampler(loglike,ptform,dynamic=dynamic, nlive=nlive, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
+        sampler = self.build_sampler(loglike,ptform, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
         return sampler
 
-    def run_nested(self, maxiter=None, maxcall=None, dlogz=None, logl_max=np.inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True, maxbatch=None):
-        if self.dynamic:
-            n_effective = np.inf if n_effective is None else n_effective
-            dlogz = 0.01 if dlogz is None else dlogz
-            self.recent_sampler.run_nested(maxiter_init=maxiter,maxcall_init=maxcall,dlogz_init=dlogz,logl_max_init=logl_max, n_effective_init=n_effective, print_progress=print_progress, print_func=None, save_bounds=True, maxbatch=maxbatch)
-        else:
-            self.recent_sampler.run_nested(maxiter=maxiter,maxcall=maxcall,dlogz=dlogz,logl_max=logl_max, n_effective=n_effective,add_live=add_live, print_progress=print_progress, print_func=None, save_bounds=True)
+    def run_nested(self, nlive_init=500, nlive_batch =100, maxiter=None, maxcall=None, dlogz=None, logl_max=np.inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True, maxbatch=None):
+        n_effective = np.inf if n_effective is None else n_effective
+        dlogz = 0.01 if dlogz is None else dlogz
+        self.recent_sampler.run_nested(nlive_init=nlive_init, nlive_batch=nlive_batch,maxiter_init=maxiter,maxcall_init=maxcall,dlogz_init=dlogz,logl_max_init=logl_max, n_effective_init=n_effective, print_progress=print_progress, print_func=None, save_bounds=True, maxbatch=maxbatch)
         self.recent_results = self.recent_sampler.results
         return self.recent_results
 

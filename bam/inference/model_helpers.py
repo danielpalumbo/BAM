@@ -34,8 +34,10 @@ def rescale_veclist(veclist,mode='edge',order=1,anti_aliasing=True):
     return outlist
 
 
-def get_rho_varphi_from_FOV_npix(fov_uas, npix):
-
+def get_rho_varphi_from_FOV_npix(fov_uas, npix, adap_fac=1, nmax=0):
+    """
+    Given a field of view, npix, adap_fac, and nmax, compute a sequence of grids of rho and varphi for use in ray-tracing.
+    """
     pxi = (np.arange(npix)+0.5)/npix-0.5
     pxj = (np.arange(npix)+0.5)/npix-0.5
     # get angles measured north of west
@@ -52,7 +54,16 @@ def get_rho_varphi_from_FOV_npix(fov_uas, npix):
     MUJ = PXJ*fov_uas
     rho_uas = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
     rho_uas = rho_uas.flatten()
-    return rho_uas, varphivec
+    if adap_fac == 1:
+        return rho_uas, varphivec
+    else:
+        rhos = [rho_uas]
+        varphis = [varphivec]
+        for n in range(1, nmax+1):
+            subr, subv = get_rho_varphi_from_FOV_npix(fov_uas, npix*adap_fac**n)
+            rhos.append(subr)
+            varphis.append(subv)
+        return rhos, varphis
 
 # def rho_grid_from_FOV_npix(fov_uas, npix):
 #     mui = pxi*fov_uas

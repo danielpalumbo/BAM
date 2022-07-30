@@ -83,12 +83,12 @@ class KerrBam:
             print("Using adaptive ray-tracing! npix is interpreted as n=0 resolution only.")
         self.rho_c = np.sqrt(27)
         # self.Mscale = Mscale
-        self.rho_uas, self.varphivec = get_rho_varphi_from_FOV_npix(self.fov_uas, self.npix)
+        self.rho_uas, self.varphivec = get_rho_varphi_from_FOV_npix(self.fov_uas, self.npix, adap_fac=adap_fac, nmax=nmax)
 
-        #while we're at it, get x and y
-        self.imxvec = -self.rho_uas*np.cos(self.varphivec)
+        # #while we're at it, get x and y
+        # self.imxvec = -self.rho_uas*np.cos(self.varphivec)
        
-        self.imyvec = self.rho_uas*np.sin(self.varphivec)
+        # self.imyvec = self.rho_uas*np.sin(self.varphivec)
         if any([isiterable(i) for i in [MoDuas, a, inc, zbl, PA, f, beta, chi, iota, e, spec, alpha_zeta, h]+jargs]):
             mode = 'model'
         else:
@@ -125,7 +125,7 @@ class KerrBam:
 
         if self.mode == 'fixed':
             self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.alpha_zeta, self.h, self.jargs]
-            self.rhovec = self.rho_uas / self.MoDuas
+            # self.rhovec = self.rho_uas / self.MoDuas
             # self.rhovec = D/(M*Mscale*Gpercsq*self.rho_uas)
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
             print("Fixed Bam: precomputing all subimages.")
@@ -157,21 +157,21 @@ class KerrBam:
         
         #convert rho_uas to gravitational units
         # rhovec = self.rho_uas/MoDuas
-        return kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)        
+        return kerr_exact_sep_lp(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)        
 
 
 
     def compute_image(self, imparams):
         """
         Given a list of values of modeled parameters in imparams,
-        compute the resulting qvec, uvec, ivec, rotimxvec, and rotimyvec.
+        compute the resulting i, q, u, v
         """
         # print(imparams)
         MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, alpha_zeta, h, jargs = imparams
 
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = kerr_exact_sep_lp(self.rho_uas, self.fov_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
+        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = kerr_exact_sep_lp(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
         if not(self.compute_P) or not(self.compute_V):
             zvecs = [np.zeros_like(rvecs[n]) for n in range(self.nmax+1)]
         if self.optical_depth == 'varying' or self.optical_depth == 'thick':
@@ -232,9 +232,11 @@ class KerrBam:
             vvecs = rescale_veclist(vvecs,order=self.interp_order,anti_aliasing=False)
         tf = np.sum(ivecs)
         ivecs = [ivec*zbl/tf for ivec in ivecs]
-        qvecs = [qvec*zbl/tf for qvec in qvecs]
-        uvecs = [uvec*zbl/tf for uvec in uvecs]
-        vvecs = [vvec*zbl/tf for vvec in vvecs]
+        if self.compute_P:
+            qvecs = [qvec*zbl/tf for qvec in qvecs]
+            uvecs = [uvec*zbl/tf for uvec in uvecs]
+        if self.compute_V:
+            vvecs = [vvec*zbl/tf for vvec in vvecs]
         return ivecs, qvecs, uvecs, vvecs 
 
 

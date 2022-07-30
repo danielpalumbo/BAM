@@ -67,9 +67,10 @@ def get_up_um(lam, eta, a):
     Analytic: get u_plus and u_minus from lambda, eta, and spin
     """
     del_theta = 1/2*(1-(eta+lam**2)/a**2)
+    sqrtdt = np.sqrt(del_theta**2+eta/a**2)
 
-    up = del_theta + np.sqrt(del_theta**2 + eta/a**2)
-    um = del_theta - np.sqrt(del_theta**2 + eta/a**2)
+    up = del_theta + sqrtdt
+    um = del_theta - sqrtdt
     return up, um
 
 def get_radroots(lam, eta, a):
@@ -82,11 +83,15 @@ def get_radroots(lam, eta, a):
     P = - A**2 / 12 - C
     Q = -A/3 * ((A/6)**2 - C)-B**2/8
     H = -9*Q + np.sqrt(12*P**3 + 81*Q**2)
-    z = np.sqrt((-2*(3**(1/3) * P) + 2**(1/3)*H**(2/3))/(2*6**(2/3)*H**(1/3))-A/6)
-    r1 = -z - np.sqrt(-A/2 - z**2 + B/(4*z))
-    r2 = -z + np.sqrt(-A/2 - z**2 + B/(4*z))
-    r3 = z - np.sqrt(-A/2 - z**2 - B/(4*z))
-    r4 = z + np.sqrt(-A/2 - z**2 - B/(4*z))
+    zsq = (-2*(3**(1/3) * P) + 2**(1/3)*H**(2/3))/(2*6**(2/3)*H**(1/3))-A/6
+    z = np.sqrt(zsq)
+    b4z = B/(4*z)
+    termp = np.sqrt(-A/2 - zsq + b4z)
+    termn = np.sqrt(-A/2 - zsq - b4z)
+    r1 = -z - termp
+    r2 = -z + termp
+    r3 = z - termn
+    r4 = z + termn
     return r1, r2, r3, r4
 
 
@@ -382,23 +387,28 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         pass
     return rvecs, phivecs, Irmasks, signprs
 
-def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, nmin=0):
+def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, nmin=0):
     if np.isclose(a,0):
         a = 1e-6
     ns = range(nmin, nmax+1)
-    rho = mudists/MoDuas
+    if adap_fac == 1:
+        rho = mudists/MoDuas
+    else:
+        rho = mudists[0]/MoDuas
     zeros = np.zeros_like(rho)
     npix = len(zeros)
     xdim = int(np.sqrt(npix))
     rp = 1+np.sqrt(1-a**2)
     rm = 1-np.sqrt(1-a**2)
-    alpha = rho*np.cos(varphi)
-    beta = rho*np.sin(varphi)
+    if adap_fac == 1:
+        alpha = rho*np.cos(varphi)
+        beta = rho*np.sin(varphi)
+    else:
+        alpha = rho*np.cos(varphi[0])
+        beta = rho*np.sin(varphi[0])        
     lam, eta = get_lam_eta(alpha,beta, inc, a)
     up, um = get_up_um(lam, eta, a)
     r1, r2, r3, r4 = get_radroots(np.complex128(lam), np.complex128(eta), a)
-    
-
     rr1 = np.real(r1)
     rr2 = np.real(r2)
     rr3 = np.real(r3)
@@ -411,8 +421,8 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     ir2_0 = np.isclose(ir2,0)
     ir3_0 = np.isclose(ir3,0)
     ir4_0 = np.isclose(ir4,0)
-    c12 = (np.isclose(np.imag(r1),-np.imag(r2)))
-    c34 = (np.isclose(np.imag(r3),-np.imag(r4)))
+    c12 = np.isclose(ir1,-ir2)
+    c34 = np.isclose(ir3,-ir4)
 
     allreal = ir1_0 * ir2_0 * ir3_0 * ir4_0
 
@@ -435,7 +445,6 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     for ni in range(len(ns)):
         m+=1
         all_signpthetas[ni] = (-1)**m*sb
-
 
     #for now, don't raytrace case 4
     rvecs1, phivecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
@@ -488,21 +497,24 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
     if adap_fac > 1 and nmax>nmin:
         for ni in range(1,len(ns)):
             n = ns[ni]
+
             Irmask = all_Irmasks[ni]
             Irmask = Irmask.reshape((xdim,xdim))
             Irmask = convolve2d(Irmask, kernel,mode='same')
             Irmask = rescale(Irmask, adap_fac, order=0)
             Irmask = np.array(Irmask,dtype=bool).flatten()
+
             adap_masks.append(Irmask)
-            submudists, subvarphi = get_rho_varphi_from_FOV_npix(fov_uas, adap_fac*xdim)
-            submudists = submudists[Irmask]
-            subvarphi = subvarphi[Irmask]
+
+            submudists = mudists[ni:]
+            subvarphi = varphi[ni:]
+            # submudists, subvarphi = get_rho_varphi_from_FOV_npix(fov_uas, adap_fac*xdim)
+            submudists[0] = submudists[0][Irmask]
+            subvarphi[0] = subvarphi[0][Irmask]
             # subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
             # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
-            
-            sub_rvecs, sub_phivecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, _ = ray_trace_all(submudists, fov_uas, MoDuas, subvarphi, inc, a, n, axisymmetric=axisymmetric, nmin=n, adap_fac=1)
-            
+            sub_rvecs, sub_phivecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, _ = ray_trace_all(submudists, MoDuas, subvarphi, inc, a, n, axisymmetric=axisymmetric, nmin=n, adap_fac=adap_fac)
             all_rvecs[ni]=sub_rvecs[0].flatten()
             all_phivecs[ni]=sub_phivecs[0].flatten()
             all_signprs[ni]=sub_signprs[0].flatten()
@@ -511,9 +523,7 @@ def ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = 1, 
             etas[ni] = sub_etas[0].flatten()
             alphas[ni] = sub_alphas[0].flatten()
             betas[ni] = sub_betas[0].flatten()
-
-
-
+    
     return all_rvecs, all_phivecs, all_signprs, all_signpthetas, alphas, betas, lams, etas, adap_masks
 
 #want to disentangle ray-tracing quantities (mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac, axisymmetric)
@@ -675,15 +685,15 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
 
 
 
-def kerr_exact_sep_lp(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, alpha_zeta, adap_fac = 1, compute_V=False, axisymmetric=True):
+def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, alpha_zeta, adap_fac = 1, compute_V=False, axisymmetric=True):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
-    rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, nmin=0)
+    rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, nmin=0)
     ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, alpha_zeta, compute_V=compute_V)
     if adap_fac > 1 and nmax > 0:
-        newsize = adap_fac**2*int(np.sqrt(len(mudists)))**2
         for n in range(1,nmax+1):
+            newsize = (adap_fac**nmax)**2*len(mudists[0])
             rvecs[n] = sub_in_adap(newsize, adap_masks[n], rvecs[n])
             phivecs[n] = sub_in_adap(newsize, adap_masks[n], phivecs[n])
             ivecs[n] = sub_in_adap(newsize, adap_masks[n], ivecs[n])
@@ -692,5 +702,4 @@ def kerr_exact_sep_lp(mudists, fov_uas, MoDuas, varphi, inc, a, nmax, boost, chi
             vvecs[n] = sub_in_adap(newsize, adap_masks[n], vvecs[n])
             redshifts[n] = sub_in_adap(newsize, adap_masks[n], redshifts[n])
             lps[n] = sub_in_adap(newsize, adap_masks[n], lps[n])
-
     return rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps

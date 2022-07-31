@@ -12,7 +12,6 @@ import dynesty
 from dynesty import plotting as dyplot
 from dynesty import utils as dyfunc
 from scipy.optimize import dual_annealing
-from bam.inference.kerrexact import kerr_exact_sep_lp
 from scipy.special import ive
 import time
 from ehtim.plotting.summary_plots import imgsum
@@ -20,7 +19,7 @@ from ehtim.calibrating.self_cal import self_cal
 # from bam.inference.schwarzschildexact import getscreencoords, getwindangle, getpsin, getalphan
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # from ehtim.observing.pulses import deltaPulse2D
-
+import bam
 
 def get_uniform_transform(lower, upper):
     return lambda x: (upper-lower)*x + lower
@@ -34,7 +33,11 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False):
+        if use_jax:
+            self.rtfunc = bam.inference.jax_kerrexact.kerr_exact_sep_lp
+        else:
+            self.rtfunc = bam.inference.kerrexact.kerr_exact_sep_lp         
         self.interp_order = interp_order
         self.compute_P = compute_P
         self.compute_V = compute_V
@@ -157,7 +160,7 @@ class KerrBam:
         
         #convert rho_uas to gravitational units
         # rhovec = self.rho_uas/MoDuas
-        return kerr_exact_sep_lp(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)        
+        return self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)        
 
 
 
@@ -171,7 +174,7 @@ class KerrBam:
 
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = kerr_exact_sep_lp(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
+        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
         if not(self.compute_P) or not(self.compute_V):
             zvecs = [np.zeros_like(rvecs[n]) for n in range(self.nmax+1)]
         if self.optical_depth == 'varying' or self.optical_depth == 'thick':

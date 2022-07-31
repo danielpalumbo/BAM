@@ -1,1 +1,1 @@
-from . import model_helpers, jfuncs, kerrexact
+from . import model_helpers, jfuncs, kerrexact, jax_kerrexact

@@ -55,7 +55,10 @@ def get_rho_varphi_from_FOV_npix(fov_uas, npix, adap_fac=1, nmax=0):
     rho_uas = np.sqrt(np.power(MUI,2.)+np.power(MUJ,2.))
     rho_uas = rho_uas.flatten()
     if adap_fac == 1:
-        return rho_uas, varphivec
+        if nmax == 0:
+            return rho_uas, varphivec
+        else:
+            return [rho_uas for n in range(nmax+1)],[varphivec for n in range(nmax+1)]
     else:
         rhos = [rho_uas]
         varphis = [varphivec]

@@ -86,7 +86,7 @@ class KerrBam:
             print("Using adaptive ray-tracing! npix is interpreted as n=0 resolution only.")
         self.rho_c = np.sqrt(27)
         # self.Mscale = Mscale
-        self.rho_uas, self.varphivec = get_rho_varphi_from_FOV_npix(self.fov_uas, self.npix, adap_fac=adap_fac, nmax=nmax)
+        self.rho_uas, self.varphivec = get_rho_varphi_from_FOV_npix(self.fov_uas, self.npix, adap_fac=self.adap_fac, nmax=nmax)
 
         # #while we're at it, get x and y
         # self.imxvec = -self.rho_uas*np.cos(self.varphivec)

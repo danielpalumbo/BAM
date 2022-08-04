@@ -4,7 +4,6 @@ import numpy as np
 import ehtim as eh
 import matplotlib.pyplot as plt
 import random
-import dill as pkl
 from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix, rescale_veclist
 from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, cphase_uvdists, logcamp_uvpairs, logcamp_uvdists, get_camp_amp_sigma, get_cphase_vis_sigma, var_sys
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
@@ -20,6 +19,10 @@ from ehtim.calibrating.self_cal import self_cal
 # from bam.inference.gradients import LogLikeGrad, LogLikeWithGrad, exact_vis_loglike
 # from ehtim.observing.pulses import deltaPulse2D
 import bam
+from tqdm import tqdm
+import dill as pkl
+
+# pkl.settings['recurse']=True
 
 def get_uniform_transform(lower, upper):
     return lambda x: (upper-lower)*x + lower
@@ -663,6 +666,64 @@ class KerrBam:
         self.recent_sampler.run_nested(nlive_init=nlive_init, nlive_batch=nlive_batch,maxiter_init=maxiter,maxcall_init=maxcall,dlogz_init=dlogz,logl_max_init=logl_max, n_effective_init=n_effective, print_progress=print_progress, print_func=None, save_bounds=True, maxbatch=maxbatch)
         self.recent_results = self.recent_sampler.results
         return self.recent_results
+
+    def run_iterated_dns(self, nlive_init=500, nlive_batch =100, maxiter=None, maxcall=None, dlogz=None, logl_max=np.inf, n_effective=None, add_live=True, print_progress=True, print_func=None, save_bounds=True, maxbatch=None, save_every_hr=np.inf, outname='./'):
+        """
+        Runs static nested sampling saving intermediate states. Then, runs dynamic nested sampling.
+        """
+
+        print("Running nested sampling, saving every "+str(save_every_hr)+" hour.")
+        tsave = time.time()
+        count = 0
+        for it, res in tqdm(enumerate(self.recent_sampler.sample_initial(nlive=nlive_init,dlogz=dlogz,maxiter=maxiter,maxcall=maxcall,logl_max=logl_max,n_effective=n_effective))):
+            if (time.time()-tsave)/3600 > save_every_hr:
+                print('current dlogz = ',res[-1])
+                # save trace plot
+                tfig, taxes = dyplot.traceplot(self.recent_sampler.results,labels=self.modeled_names)
+                plt.savefig(outname+'_trace_plot_'+str(count).zfill(3)+'.png',dpi=300)
+                plt.close()
+
+
+                # save current sampler state
+                rstate = self.recent_sampler.rstate
+                collect = [self.recent_sampler,rstate]
+                pkl.dump(collect,open(outname+'_sampler_'+str(count).zfill(3)+'.p','wb'),protocol=pkl.HIGHEST_PROTOCOL)
+
+               
+             
+          # increment count
+                count += 1
+                tsave = time.time()
+        print("Initial static run complete. Now running dynamic nested sampling.")
+
+        self.recent_sampler.run_nested(nlive_init=0, nlive_batch=nlive_batch,maxiter_init=maxiter,maxcall_init=maxcall,dlogz_init=dlogz,logl_max_init=logl_max, n_effective_init=n_effective, print_progress=print_progress, print_func=None, save_bounds=True, maxbatch=maxbatch)
+
+        # print("Adding live points for dynamic nested sampling.")
+        # for itf, resf in enumerate(self.recent_sampler.sample_batch(nlive_new=nlive_batch,)):
+        #     # print current dlogz
+        #     if (time.time()-tsave)/3600 > save_every_hr:
+        #         print('current dlogz = ',resf[-1])
+
+        #         # save trace plot
+        #         tfig, taxes = dyplot.traceplot(self.recent_sampler.results)
+        #         plt.savefig(outname+'_dynamic_trace_plot_'+str(count).zfill(3)+'.png',dpi=300)
+        #         plt.close()
+
+        #         # save current sampler state
+        #         rstate = sampler.rstate
+        #         collect = [sampler,rstate]
+        #         pickle.dump(collect,open(outname+'_dynamic_sampler_'+str(count).zfill(3)+'.p','wb'),protocol=pkl.HIGHEST_PROTOCOL)
+
+        #         # increment count
+        #         count += 1
+        #         tsave = time.time()
+        self.recent_results = self.recent_sampler.results
+        return self.recent_results
+
+    def load_sampler(self,filename):
+        sampler, rstate = pkl.load(open(filename,'rb'))
+        self.recent_sampler = sampler
+        self.recent_sampler.rstate = rstate
 
     def run_nested_default(self):
         self.recent_sampler.run_nested()

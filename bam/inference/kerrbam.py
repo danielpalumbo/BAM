@@ -117,16 +117,19 @@ class KerrBam:
         for i in range(len(self.modeled_names)):
             self.modeled_param_dict[self.modeled_names[i]]=self.modeled_params[i]
 
-        self.periodic_names = []
-        self.periodic_indices=[]
         if self.periodic:
-            for i in ['PA','chi']:
-                if i in self.modeled_names:
-                    bounds = self.modeled_params[self.modeled_names.index(i)]
-                    if np.isclose(np.exp(1j*bounds[0]),np.exp(1j*bounds[1]),rtol=1e-12):
-                        print("Found periodic prior on "+str(i))
-                        self.periodic_names.append(i)
-                        self.periodic_indices.append(self.modeled_names.index(i))
+            print("Periodic priors are not currently functional. Reverting to non-periodic.")
+            self.periodic = False
+        # self.periodic_names = []
+        # self.periodic_indices=[]
+        # if self.periodic:
+        #     for i in ['PA','chi']:
+        #         if i in self.modeled_names:
+        #             bounds = self.modeled_params[self.modeled_names.index(i)]
+        #             if np.isclose(np.exp(1j*bounds[0]),np.exp(1j*bounds[1]),rtol=1e-12):
+        #                 print("Found periodic prior on "+str(i))
+        #                 self.periodic_names.append(i)
+        #                 self.periodic_indices.append(self.modeled_names.index(i))
         self.model_dim = len(self.modeled_names)
 
         if self.mode == 'fixed':
@@ -647,7 +650,7 @@ class KerrBam:
 
     
     def build_sampler(self, loglike, ptform, bound='multi', sample='auto', pool=None, queue_size=None):
-        sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, periodic=self.periodic_indices, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
+        sampler = dynesty.DynamicNestedSampler(loglike, ptform,self.model_dim, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
         self.recent_sampler=sampler
         return sampler
 

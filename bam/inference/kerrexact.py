@@ -392,7 +392,10 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
         a = 1e-6
     ns = range(nmin, nmax+1)
     if adap_fac == 1:
-        rho = mudists/MoDuas
+        if type(mudists) is list:
+            rho = mudists[0]/MoDuas
+        else:
+            rho = mudists/MoDuas
     else:
         rho = mudists[0]/MoDuas
     zeros = np.zeros_like(rho)
@@ -401,8 +404,12 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
     rp = 1+np.sqrt(1-a**2)
     rm = 1-np.sqrt(1-a**2)
     if adap_fac == 1:
-        alpha = rho*np.cos(varphi)
-        beta = rho*np.sin(varphi)
+        if type(varphi) is list:
+            alpha = rho*np.cos(varphi[0])
+            beta = rho*np.sin(varphi[0])
+        else:
+            alpha = rho*np.cos(varphi)
+            beta = rho*np.sin(varphi)
     else:
         alpha = rho*np.cos(varphi[0])
         beta = rho*np.sin(varphi[0])        
@@ -451,7 +458,7 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
     rvecs2, phivecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     rvecs3, phivecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     # rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,rm,rp,sb[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
-    
+
 
     #stitch together cases
     all_rvecs = []

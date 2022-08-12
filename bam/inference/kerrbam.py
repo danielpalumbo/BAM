@@ -840,7 +840,7 @@ class KerrBam:
             else:
                 vvec = np.zeros_like(ivec)
         
-        im = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
+        im = eh.image.make_empty(self.npix*self.adap_fac**self.nmax,self.fov, ra=ra, dec=dec, rf= rf, mjd = mjd, source=source)#, pulse=deltaPulse2D)
         im.ivec = ivec
         im.qvec = qvec
         im.uvec = uvec

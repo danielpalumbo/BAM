@@ -387,7 +387,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         pass
     return rvecs, phivecs, Irmasks, signprs
 
-def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, nmin=0):
+def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, nmin=0, prev_Irmask = None):
     if np.isclose(a,0):
         a = 1e-6
     ns = range(nmin, nmax+1)
@@ -400,7 +400,6 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
         rho = mudists[0]/MoDuas
     zeros = np.zeros_like(rho)
     npix = len(zeros)
-    xdim = int(np.sqrt(npix))
     rp = 1+np.sqrt(1-a**2)
     rm = 1-np.sqrt(1-a**2)
     if adap_fac == 1:
@@ -454,6 +453,7 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
         all_signpthetas[ni] = (-1)**m*sb
 
     #for now, don't raytrace case 4
+
     rvecs1, phivecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     rvecs2, phivecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
     rvecs3, phivecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
@@ -498,14 +498,20 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
     lams = [lam for n in ns]
     etas = [eta for n in ns]
 
-    adap_masks = [0]
+    adap_masks = [all_Irmasks[0]]
     #do adaptive raytracing; for each except the lowest n subimage,
     #ray trace higher ns at higher resolution around the Irmask.
     if adap_fac > 1 and nmax>nmin:
-        for ni in range(1,len(ns)):
+        for ni in range(1,len(ns)):#(nmin+1,nmax+1):
             n = ns[ni]
-
             Irmask = all_Irmasks[ni]
+            if type(prev_Irmask) != type(None):
+                newsize = len(prev_Irmask)
+                # Irmask = sub_in_adap(newsize, np.array(prev_Irmask,dtype=bool), Irmask)
+                xdim = int(np.sqrt(newsize))
+                Irmask = prev_Irmask
+            else:
+                xdim = int(np.sqrt(npix))
             Irmask = Irmask.reshape((xdim,xdim))
             Irmask = convolve2d(Irmask, kernel,mode='same')
             Irmask = rescale(Irmask, adap_fac, order=0)
@@ -521,7 +527,8 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
             # subrho = rescale(rho.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
             # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
-            sub_rvecs, sub_phivecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, _ = ray_trace_all(submudists, MoDuas, subvarphi, inc, a, n, axisymmetric=axisymmetric, nmin=n, adap_fac=adap_fac)
+            prev_Irmask = Irmask
+            sub_rvecs, sub_phivecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, sub_masks = ray_trace_all(submudists, MoDuas, subvarphi, inc, a, min(nmax,n+1), axisymmetric=axisymmetric, nmin=n, adap_fac=1, prev_Irmask=prev_Irmask)
             all_rvecs[ni]=sub_rvecs[0].flatten()
             all_phivecs[ni]=sub_phivecs[0].flatten()
             all_signprs[ni]=sub_signprs[0].flatten()
@@ -530,7 +537,15 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
             etas[ni] = sub_etas[0].flatten()
             alphas[ni] = sub_alphas[0].flatten()
             betas[ni] = sub_betas[0].flatten()
-    
+            if n < nmax:
+                prev_Irmask = sub_in_adap(len(mudists[ni]),Irmask,sub_masks[1])
+            # if n < nmax:
+            #     newsize = (adap_fac**(n+1))**2*len(mudists[0])
+            #     print('newsize',newsize)
+            #     print('adpa_masks[n]',adap_masks[n].shape)
+            #     print('sub_masks[1]',sub_masks[1].shape)
+    else:
+        adap_masks = all_Irmasks
     return all_rvecs, all_phivecs, all_signprs, all_signpthetas, alphas, betas, lams, etas, adap_masks
 
 #want to disentangle ray-tracing quantities (mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac, axisymmetric)
@@ -700,7 +715,7 @@ def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_e
     ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, alpha_zeta, compute_V=compute_V)
     if adap_fac > 1 and nmax > 0:
         for n in range(1,nmax+1):
-            newsize = (adap_fac**nmax)**2*len(mudists[0])
+            newsize = (adap_fac**n)**2*len(mudists[0])
             rvecs[n] = sub_in_adap(newsize, adap_masks[n], rvecs[n])
             phivecs[n] = sub_in_adap(newsize, adap_masks[n], phivecs[n])
             ivecs[n] = sub_in_adap(newsize, adap_masks[n], ivecs[n])

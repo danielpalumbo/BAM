@@ -1,6 +1,7 @@
 import numpy as np
 try:
     import collections.abc as collections_abc
+    from collections_abc import Iterable
 except ImportError: 
     import collections as collections_abc
     

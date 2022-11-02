@@ -1,9 +1,9 @@
 import numpy as np
 try:
-    import collections.abc as collections_abc
+    from collections.abc import Iterable
 except ImportError: 
-    import collections as collections_abc
-    
+    from collections import Iterable
+
 Gpercsq = 6.67e-11 / (3e8)**2
 M87_ra = 12.513728717168174
 M87_dec = 12.39112323919932

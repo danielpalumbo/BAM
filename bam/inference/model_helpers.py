@@ -17,6 +17,8 @@ M87_MoDuas = M87_MoD/RADPERUAS
 
 SgrA_mass = 4.1e6 * 2e30
 SgrA_dist = 8*3.086e19
+SgrA_MoD = Gpercsq*SgrA_mass / SgrA_dist
+SgrA_MoDuas = SgrA_MoD/RADPERUAS
 
 from skimage.transform import rescale, resize
 

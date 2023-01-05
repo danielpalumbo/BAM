@@ -111,7 +111,8 @@ class KerrBam:
 
         self.modeled_indices = [i for i in range(len(self.all_params)) if isiterable(self.all_params[i])]
         self.modeled_names = [self.all_names[i] for i in self.modeled_indices]
-        self.error_modeling = np.any(np.array([i in self.modeled_names for i in ['f','e','var_a','var_b','var_c','var_u0']])) or self.f != 0. or self.e != 0.
+        self.error_modeling = np.any(np.array([i in self.modeled_names for i in ['f','e','var_a','var_b','var_c','var_u0']]))# or self.f != 0. or self.e != 0.
+        self.adding_syserr = np.any(np.array([self.all_param_dict[i] != 0 for i in ['f','e','var_a','var_b','var_c']]))
         self.modeled_params = [i for i in self.all_params if isiterable(i)]
         self.modeled_param_dict = dict()
         for i in range(len(self.modeled_names)):
@@ -394,6 +395,9 @@ class KerrBam:
             vis = obs.data['vis']
             sigma = obs.data['sigma']
             amp = obs.unpack('amp',debias=debias)['amp']
+            if not(self.error_modeling) and self.adding_syserr:
+                _, sigma = amp_add_syserr(amp, sigma, fractional=self.f, additive = self.e, var_a = self.var_a, var_b=self.var_b, var_c=self.var_c, var_u0=self.var_u0, u = uvdists)
+            
             # u = obs.data['u']
             # v = obs.data['v']
             visuv = np.vstack([u,v]).T
@@ -429,6 +433,9 @@ class KerrBam:
             uvis = obs.data['uvis']
             pvis = qvis+1j*uvis
             sigma = obs.data['sigma']
+            amp = obs.unpack('amp', debias=debias)['amp']
+            if not(self.error_modeling) and self.adding_syserr:
+                _, sigma = amp_add_syserr(amp, sigma, fractional=self.f, additive = self.e, var_a = self.var_a, var_b=self.var_b, var_c=self.var_c, var_u0=self.var_u0, u = uvdists)
             mvis = pvis/vis
             msigma = sigma * np.sqrt(2/np.abs(vis)**2 + np.abs(pvis)**2 / np.abs(vis)**4)
             # u = obs.data['u']
@@ -448,11 +455,16 @@ class KerrBam:
             logcamp = logcamp_data['camp']
             logcamp_sigma = logcamp_data['sigmaca']
             campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
-            if self.error_modeling:
+            if self.error_modeling or self.adding_syserr:
                 print("Back-fetching quadrangle ampltudes and sigmas.")
                 n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err = get_camp_amp_sigma(obs, logcamp_data)
                 campd1, campd2, campd3, campd4 = logcamp_uvdists(logcamp_data)
                 print("Done!")
+            if not(self.error_modeling):
+                if self.adding_syserr:
+                    _, logcamp_sigma = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, campd1, campd2, campd3, campd4, fractional=self.f, additive = self.e, var_a = self.var_a, var_b=self.var_b, var_c=self.var_c, var_u0=self.var_u0, debias=debias)
+                logcamp_ln_norm = -np.sum(np.log((2.0*np.pi)**0.5 * logcamp_sigma))
+                
             Ncamp = len(logcamp)
         if 'cphase' in data_types:
             print("Building cphase likelihood!")
@@ -460,7 +472,7 @@ class KerrBam:
             cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)
             cphase = cphase_data['cphase']
             cphase_sigma = cphase_data['sigmacp']
-            if self.error_modeling:
+            if self.error_modeling or self.adding_syserr:
                 print("Back-fetching triangle amplitudes and sigmas.")
                 v1, v2, v3, v1err, v2err, v3err = get_cphase_vis_sigma(obs, cphase_data)
                 cphased1, cphased2, cphased3 = cphase_uvdists(cphase_data)
@@ -468,6 +480,10 @@ class KerrBam:
                 v2err = np.abs(v2err)
                 v3err = np.abs(v3err)
                 print("Done!")
+            if not(self.error_modeling):
+                if self.adding_syserr:
+                    _, cphase_sigma = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, cphased1, cphased2, cphased3, fractional=self.f, additive = self.e, var_a = self.var_a, var_b=self.var_b, var_c=self.var_c, var_u0=self.var_u0)
+                cphase_ln_norm = -np.sum(np.log(2.0*np.pi*ive(0, 1.0/(cphase_sigma)**2))) 
             Ncphase = len(cphase)
         def loglike(params):
             to_eval = self.build_eval(params)
@@ -564,7 +580,7 @@ class KerrBam:
                     ln_norm = logcamplike-np.sum(np.log((2.0*np.pi)**0.5 * new_logcamp_err)) 
                 else:
                     logcamplike = -0.5*np.sum((logcamp-model_logcamp)**2 / logcamp_sigma**2)
-                    ln_norm = logcamplike-np.sum(np.log((2.0*np.pi)**0.5 * logcamp_sigma)) 
+                    ln_norm = logcamplike + logcamp_ln_norm
                 out += ln_norm
             if 'cphase' in data_types:
                 model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
@@ -574,8 +590,7 @@ class KerrBam:
                     ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(new_cphase_err)**2))) 
                 else:
                     cphaselike = -np.sum((1-np.cos(cphase-model_cphase))/cphase_sigma**2)
-                    # ln_norm = cphaselike -np.sum(np.log((2.0*np.pi)**0.5 * cphase_sigma))
-                    ln_norm = cphaselike-np.sum(np.log(2.0*np.pi*ive(0, 1.0/(cphase_sigma)**2))) 
+                    ln_norm = cphaselike + cphase_ln_norm
                 out += ln_norm
             return out
         print("Built combined likelihood function!")

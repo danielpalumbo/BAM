@@ -36,7 +36,7 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False):
         if use_jax:
             self.rtfunc = bam.inference.jax_kerrexact.kerr_exact_sep_lp
         else:
@@ -72,6 +72,8 @@ class KerrBam:
         self.spec = spec
         self.alpha_zeta = alpha_zeta
         self.h = h
+        self.polfrac = polfrac
+        self.dEVPA = dEVPA
         self.f = f
         self.e = e
         self.var_a = var_a
@@ -95,14 +97,14 @@ class KerrBam:
         # self.imxvec = -self.rho_uas*np.cos(self.varphivec)
        
         # self.imyvec = self.rho_uas*np.sin(self.varphivec)
-        if any([isiterable(i) for i in [MoDuas, a, inc, zbl, PA, f, beta, chi, iota, e, spec, alpha_zeta, h]+jargs]):
+        if any([isiterable(i) for i in [MoDuas, a, inc, zbl, PA, f, beta, chi, iota, e, spec, alpha_zeta, h, polfrac, dEVPA]+jargs]):
             mode = 'model'
         else:
             mode = 'fixed' 
         self.mode = mode
         self.noise_param_names = ['f','e','var_a','var_b','var_c','var_u0']
-        self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, alpha_zeta, h, f, e, var_a, var_b, var_c, var_u0]+jargs
-        self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','alpha_zeta','h','f','e','var_a','var_b','var_c','var_u0']+jarg_names
+        self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, alpha_zeta, h, polfrac, dEVPA, f, e, var_a, var_b, var_c, var_u0]+jargs
+        self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','alpha_zeta','h','polfrac','dEVPA','f','e','var_a','var_b','var_c','var_u0']+jarg_names
         self.imparam_names = [i for i in self.all_names if i not in self.noise_param_names+jarg_names]
         self.imparam_names = self.imparam_names + ['jargs']
         self.all_param_dict = dict()
@@ -134,7 +136,7 @@ class KerrBam:
         self.model_dim = len(self.modeled_names)
 
         if self.mode == 'fixed':
-            self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.alpha_zeta, self.h, self.jargs]
+            self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.alpha_zeta, self.h, self.polfrac, self.dEVPA, self.jargs]
             # self.rhovec = self.rho_uas / self.MoDuas
             # self.rhovec = D/(M*Mscale*Gpercsq*self.rho_uas)
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
@@ -162,7 +164,7 @@ class KerrBam:
             print("Can't directly evaluate kerr_exact in model mode!")
             return
 
-        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, alpha_zeta, h, jargs = self.imparams
+        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, alpha_zeta, h, polfrac, dEVPA, jargs = self.imparams
 
         
         #convert rho_uas to gravitational units
@@ -177,7 +179,7 @@ class KerrBam:
         compute the resulting i, q, u, v
         """
         # print(imparams)
-        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, alpha_zeta, h, jargs = imparams
+        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, alpha_zeta, h, polfrac, dEVPA, jargs = imparams
 
         
         #convert rho_uas to gravitational units
@@ -243,10 +245,14 @@ class KerrBam:
         tf = np.sum(ivecs)
         ivecs = [ivec*zbl/tf for ivec in ivecs]
         if self.compute_P:
-            qvecs = [qvec*zbl/tf for qvec in qvecs]
-            uvecs = [uvec*zbl/tf for uvec in uvecs]
+            qvecs = [qvec*zbl/tf*polfrac for qvec in qvecs]
+            uvecs = [uvec*zbl/tf*polfrac for uvec in uvecs]
+            if not np.isclose(0.,dEVPA):
+                pvecs = [(qvecs[i]+1j*uvecs[i])*np.exp(2j*dEVPA) for i in range(len(qvecs))]
+                qvecs = [np.real(pvec) for pvec in pvecs]
+                uvecs = [np.imag(pvec) for pvec in pvecs]
         if self.compute_V:
-            vvecs = [vvec*zbl/tf for vvec in vvecs]
+            vvecs = [vvec*zbl/tf*polfrac for vvec in vvecs]
         return ivecs, qvecs, uvecs, vvecs 
 
 
@@ -554,14 +560,15 @@ class KerrBam:
             if 'mvis' in data_types:
                 if self.error_modeling:
                     _, sd = amp_add_syserr(amp, msigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
-                    msigma = sd * np.sqrt(2/np.abs(vis)**2 + np.abs(pvis)**2 / np.abs(vis)**4)
-                    mvis_ln_norm = -2*np.sum(np.log((2.0*np.pi)**0.5*msigma))
+                    msd = sd * np.sqrt(2/np.abs(vis)**2 + np.abs(pvis)**2 / np.abs(vis)**4)
+                    mln = -2*np.sum(np.log((2.0*np.pi)**0.5*msd))
                 else:
-                    sd = msigma
+                    msd = msigma
+                    mln = mvis_ln_norm
                 # sd = sqrt(msigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 #sd = vsigma*sd/sigma
-                mvislike = -0.5 * np.sum(np.abs(model_mvis-mvis)**2.0/sd**2)
-                ln_norm = mvislike + mvis_ln_norm
+                mvislike = -0.5 * np.sum(np.abs(model_mvis-mvis)**2.0/msd**2)
+                ln_norm = mvislike + mln
                 out+=ln_norm
             if 'amp' in data_types:
                 if self.error_modeling:
@@ -602,7 +609,7 @@ class KerrBam:
 
 
     def KerrBam_from_eval(self, to_eval):
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], alpha_zeta=to_eval['alpha_zeta'], h = to_eval['h'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac, interp_order=self.interp_order)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], alpha_zeta=to_eval['alpha_zeta'], h = to_eval['h'], polfrac = to_eval['polfrac'], dEVPA = to_eval['dEVPA'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac, interp_order=self.interp_order)
         return new
 
     def annealing_MAP(self, obs, data_types=['vis'], x0 = None, ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True, seed = 4):

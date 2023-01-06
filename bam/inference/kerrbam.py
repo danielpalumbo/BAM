@@ -438,6 +438,7 @@ class KerrBam:
                 _, sigma = amp_add_syserr(amp, sigma, fractional=self.f, additive = self.e, var_a = self.var_a, var_b=self.var_b, var_c=self.var_c, var_u0=self.var_u0, u = uvdists)
             mvis = pvis/vis
             msigma = sigma * np.sqrt(2/np.abs(vis)**2 + np.abs(pvis)**2 / np.abs(vis)**4)
+            mvis_ln_norm = -2*np.sum(np.log((2.0*np.pi)**0.5*msigma))
             # u = obs.data['u']
             # v = obs.data['v']
             visuv = np.vstack([u,v]).T
@@ -553,12 +554,14 @@ class KerrBam:
             if 'mvis' in data_types:
                 if self.error_modeling:
                     _, sd = amp_add_syserr(amp, msigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
+                    msigma = sd * np.sqrt(2/np.abs(vis)**2 + np.abs(pvis)**2 / np.abs(vis)**4)
+                    mvis_ln_norm = -2*np.sum(np.log((2.0*np.pi)**0.5*msigma))
                 else:
                     sd = msigma
                 # sd = sqrt(msigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
                 #sd = vsigma*sd/sigma
                 mvislike = -0.5 * np.sum(np.abs(model_mvis-mvis)**2.0/sd**2)
-                ln_norm = mvislike -2*np.sum(np.log((2.0*np.pi)**0.5*sd))
+                ln_norm = mvislike + mvis_ln_norm
                 out+=ln_norm
             if 'amp' in data_types:
                 if self.error_modeling:

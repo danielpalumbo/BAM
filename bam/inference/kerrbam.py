@@ -5,7 +5,7 @@ import ehtim as eh
 import matplotlib.pyplot as plt
 import random
 from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix, rescale_veclist
-from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, cphase_uvdists, logcamp_uvpairs, logcamp_uvdists, get_camp_amp_sigma, get_cphase_vis_sigma, var_sys
+from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, cphase_uvdists, logcamp_uvpairs, logcamp_uvdists, get_camp_amp_sigma, get_cphase_vis_sigma, var_sys, get_minimal_logcamps, get_minimal_cphases
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
 from dynesty import plotting as dyplot
@@ -387,7 +387,7 @@ class KerrBam:
         self.nrmse = nrmse
         return nrmse
 
-    def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True):
+    def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True, use_diag=True,logcamp_file='',cphase_file=''):
         """
         Given an observation and a list of data product names, 
         return a likelihood function that accounts for each contribution. 
@@ -458,7 +458,13 @@ class KerrBam:
             print("Building amp likelihood!")
         if 'logcamp' in data_types:
             print("Building logcamp likelihood!")
-            logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
+            if use_diag:
+                if len(logcamp_file)>0:
+                    logcamp_data = np.genfromtxt(logcamp_file,dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
+                else:
+                    logcamp_data = get_minimal_logcamps(obs)
+            else:
+                logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
             logcamp = logcamp_data['camp']
             logcamp_sigma = logcamp_data['sigmaca']
             campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
@@ -475,7 +481,13 @@ class KerrBam:
             Ncamp = len(logcamp)
         if 'cphase' in data_types:
             print("Building cphase likelihood!")
-            cphase_data = obs.c_phases(ang_unit='rad')
+            if use_diag:
+                if len(cphase_file)>0:
+                    cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
+                else:
+                    cphase_data = get_minimal_cphases(obs)
+            else:
+                cphase_data = obs.c_phases(ang_unit='rad')
             cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)
             cphase = cphase_data['cphase']
             cphase_sigma = cphase_data['sigmacp']
@@ -679,11 +691,11 @@ class KerrBam:
         self.recent_sampler=sampler
         return sampler
 
-    def setup(self, obs, data_types=['vis'], bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None):
+    def setup(self, obs, data_types=['vis'], bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None, use_diag=True, logcamp_file = '', cphase_file=''):
         self.source = obs.source
         self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
-        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias)
+        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias, use_diag=use_diag, logcamp_file=logcamp_file,cphase_file=cphase_file)
         sampler = self.build_sampler(loglike,ptform, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
         return sampler
@@ -890,13 +902,21 @@ class KerrBam:
         out.pa = 0
         return out
 
-    def logcamp_chisq(self,obs, debias=True):
+    def logcamp_chisq(self,obs, debias=True,use_diag=True,logcamp_file=''):
         if self.mode != 'fixed':
             print("Can only compute chisqs to fixed model!")
             return
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
-        logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
+        if use_diag:
+            if len(logcamp_file)>0:
+                logcamp_data = np.genfromtxt(logcamp_file,dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
+            else:
+                logcamp_data = get_minimal_logcamps(obs)
+        else:
+            logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
+        
+        # logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
         sigmaca = logcamp_data['sigmaca']
         logcamp = logcamp_data['camp']
         campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
@@ -911,7 +931,14 @@ class KerrBam:
             return
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
-        cphase_data = obs.c_phases(ang_unit='rad')
+        if use_diag:
+                if len(cphase_file)>0:
+                    cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
+                else:
+                    cphase_data = get_minimal_cphases(obs)
+            else:
+                cphase_data = obs.c_phases(ang_unit='rad')
+            # cphase_data = obs.c_phases(ang_unit='rad')
         cphase = cphase_data['cphase']
         sigmacp = cphase_data['sigmacp']
         cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)

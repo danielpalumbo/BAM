@@ -932,13 +932,13 @@ class KerrBam:
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
         if use_diag:
-                if len(cphase_file)>0:
-                    cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
-                else:
-                    cphase_data = get_minimal_cphases(obs)
+            if len(cphase_file)>0:
+                cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
             else:
-                cphase_data = obs.c_phases(ang_unit='rad')
-            # cphase_data = obs.c_phases(ang_unit='rad')
+                cphase_data = get_minimal_cphases(obs)
+        else:
+            cphase_data = obs.c_phases(ang_unit='rad')
+        # cphase_data = obs.c_phases(ang_unit='rad')
         cphase = cphase_data['cphase']
         sigmacp = cphase_data['sigmacp']
         cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)

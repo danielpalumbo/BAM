@@ -442,9 +442,9 @@ def get_minimal_cphases(obs):
         obs_cphase = obs_cphase_orig[keep]
         if len(obs_cphase) != N_min:
             print('*****************WARNING: minimal set not found*****************')
-        else:
-            print('Size of recovered minimal set = '+str(len(obs_cphase))+'.')
-        print('========================================================================')
+        # else:
+        #     print('Size of recovered minimal set = '+str(len(obs_cphase))+'.')
+        # print('========================================================================')
 
         obs_cphase_arr.append(obs_cphase)
         design_mats.append(design_mat)

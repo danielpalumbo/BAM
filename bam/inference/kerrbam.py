@@ -5,7 +5,7 @@ import ehtim as eh
 import matplotlib.pyplot as plt
 import random
 from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix, rescale_veclist
-from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, cphase_uvpairs, cphase_uvdists, logcamp_uvpairs, logcamp_uvdists, get_camp_amp_sigma, get_cphase_vis_sigma, var_sys, get_minimal_logcamps, get_minimal_cphases
+from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, get_cphase_uvpairs, cphase_uvdists, get_logcamp_uvpairs, logcamp_uvdists, get_camp_amp_sigma, get_cphase_vis_sigma, var_sys, get_minimal_logcamps, get_minimal_cphases
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
 from dynesty import plotting as dyplot
@@ -387,7 +387,7 @@ class KerrBam:
         self.nrmse = nrmse
         return nrmse
 
-    def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True, compute_minimal=True,logcamp_file='',cphase_file=''):
+    def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True, compute_minimal=True,load_recent=False):
         """
         Given an observation and a list of data product names, 
         return a likelihood function that accounts for each contribution. 
@@ -459,15 +459,17 @@ class KerrBam:
         if 'logcamp' in data_types:
             print("Building logcamp likelihood!")
             if compute_minimal:
-                if len(logcamp_file)>0:
-                    logcamp_data = np.genfromtxt(logcamp_file,dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
+                if load_recent:
+                    logcamp_data = np.genfromtxt('logcamps.txt',dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
+                    logcamp_design_mat = np.loadtxt('logcamp_design_matrix.txt')
+                    logcamp_uvpairs = np.loadtxt('logcamp_uvpairs.txt')
                 else:
-                    logcamp_data = get_minimal_logcamps(obs)
+                    logcamp_data, logcamp_design_mat, logcamp_uvpairs = get_minimal_logcamps(obs,debias=debias)
             else:
                 logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
             logcamp = logcamp_data['camp']
             logcamp_sigma = logcamp_data['sigmaca']
-            campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
+            campuv1, campuv2, campuv3, campuv4 = get_logcamp_uvpairs(logcamp_data)
             if self.error_modeling or self.adding_syserr:
                 print("Back-fetching quadrangle ampltudes and sigmas.")
                 n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err = get_camp_amp_sigma(obs, logcamp_data)
@@ -482,13 +484,15 @@ class KerrBam:
         if 'cphase' in data_types:
             print("Building cphase likelihood!")
             if compute_minimal:
-                if len(cphase_file)>0:
-                    cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
+                if load_recent:
+                    cphase_data = np.genfromtxt('cphases.txt',dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
+                    cphase_design_mat = np.loadtxt('cphase_design_matrix.txt')
+                    cphase_uvpairs = np.loadtxt('cphase_uvpairs.txt')
                 else:
-                    cphase_data = get_minimal_cphases(obs)
+                    cphase_data, cphase_design_mat, cphase_uvpairs = get_minimal_cphases(obs)
             else:
                 cphase_data = obs.c_phases(ang_unit='rad')
-            cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)
+            cphaseuv1, cphaseuv2, cphaseuv3 = get_cphase_uvpairs(cphase_data)
             cphase = cphase_data['cphase']
             cphase_sigma = cphase_data['sigmacp']
             if self.error_modeling or self.adding_syserr:
@@ -595,7 +599,10 @@ class KerrBam:
                 ln_norm = amplike-np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
                 out+=ln_norm
             if 'logcamp' in data_types:
-                model_logcamp = self.modelim_logcamp(campuv1, campuv2, campuv3, campuv4, ttype=ttype)
+                if compute_minimal:
+                    model_logcamp = logcamp_design_mat.dot(np.log(np.abs(self.modelim_ivis(logcamp_uvpairs,ttype=ttype))))
+                else:
+                    model_logcamp = self.modelim_logcamp(campuv1, campuv2, campuv3, campuv4, ttype=ttype)
                 if self.error_modeling:
                     _, new_logcamp_err = logcamp_add_syserr(n1amp, n2amp, d1amp, d2amp, n1err, n2err, d1err, d2err, campd1, campd2, campd3, campd4, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], debias=debias)
                     logcamplike = -0.5*np.sum((logcamp-model_logcamp)**2/new_logcamp_err**2)
@@ -605,7 +612,10 @@ class KerrBam:
                     ln_norm = logcamplike + logcamp_ln_norm
                 out += ln_norm
             if 'cphase' in data_types:
-                model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
+                if compute_minimal:
+                    model_cphase = cphase_design_mat.dot(np.angle(self.modelim_ivis(cphase_uvpairs,ttype=ttype)))
+                else:
+                    model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3, ttype=ttype)
                 if self.error_modeling:
                     _, new_cphase_err = cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, cphased1, cphased2, cphased3, fractional=to_eval['f'], additive=to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'])
                     cphaselike = -np.sum((1-np.cos(cphase-model_cphase))/new_cphase_err**2)
@@ -691,11 +701,11 @@ class KerrBam:
         self.recent_sampler=sampler
         return sampler
 
-    def setup(self, obs, data_types=['vis'], bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None, compute_minimal=True, logcamp_file = '', cphase_file=''):
+    def setup(self, obs, data_types=['vis'], bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None, compute_minimal=True, load_recent=False):
         self.source = obs.source
         self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
-        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias, compute_minimal=compute_minimal, logcamp_file=logcamp_file,cphase_file=cphase_file)
+        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias, compute_minimal=compute_minimal, load_recent=load_recent)
         sampler = self.build_sampler(loglike,ptform, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
         return sampler
@@ -902,46 +912,46 @@ class KerrBam:
         out.pa = 0
         return out
 
-    def logcamp_chisq(self,obs, debias=True,compute_minimal=True,logcamp_file=''):
+    def logcamp_chisq(self,obs, debias=True,compute_minimal=True,load_recent=False):
         if self.mode != 'fixed':
             print("Can only compute chisqs to fixed model!")
             return
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
         if compute_minimal:
-            if len(logcamp_file)>0:
-                logcamp_data = np.genfromtxt(logcamp_file,dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
+            if load_recent:
+                logcamp_data = np.genfromtxt('logcamps.txt',dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
             else:
-                logcamp_data = get_minimal_logcamps(obs)
+                logcamp_data, logcamp_design_mat, logcamp_uvpairs = get_minimal_logcamps(obs)
         else:
             logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
         
         # logcamp_data = obs.c_amplitudes(ctype='logcamp', debias=debias)
         sigmaca = logcamp_data['sigmaca']
         logcamp = logcamp_data['camp']
-        campuv1, campuv2, campuv3, campuv4 = logcamp_uvpairs(logcamp_data)
+        campuv1, campuv2, campuv3, campuv4 = get_logcamp_uvpairs(logcamp_data)
         model_logcamp = self.modelim_logcamp(campuv1, campuv2, campuv3, campuv4)
         # model_logcamps = self.logcamp_fixed(logcamp_data['u1'],logcamp_data['u2'],logcamp_data['u3'],logcamp_data['u4'],logcamp_data['v1'],logcamp_data['v2'],logcamp_data['v3'],logcamp_data['v4'])
         logcamp_chisq = 1/len(sigmaca) * np.sum(np.abs((logcamp-model_logcamp)/sigmaca)**2)
         return logcamp_chisq
 
-    def cphase_chisq(self,obs):
+    def cphase_chisq(self,obs,compute_minimal=True,load_recent=False):
         if self.mode != 'fixed':
             print("Can only compute chisqs to fixed model!")
             return
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
         if compute_minimal:
-            if len(cphase_file)>0:
-                cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
+            if load_recent:
+                cphase_data = np.genfromtxt('cphases.txt',dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
             else:
-                cphase_data = get_minimal_cphases(obs)
+                cphase_data, cphase_design_mat, cphase_uvpairs = get_minimal_cphases(obs)
         else:
             cphase_data = obs.c_phases(ang_unit='rad')
         # cphase_data = obs.c_phases(ang_unit='rad')
         cphase = cphase_data['cphase']
         sigmacp = cphase_data['sigmacp']
-        cphaseuv1, cphaseuv2, cphaseuv3 = cphase_uvpairs(cphase_data)
+        cphaseuv1, cphaseuv2, cphaseuv3 = get_cphase_uvpairs(cphase_data)
         model_cphase = self.modelim_cphase(cphaseuv1, cphaseuv2, cphaseuv3)
         # model_cphases = self.cphase_fixed(cphase_data['u1'],cphase_data['u2'],cphase_data['u3'],cphase_data['v1'],cphase_data['v2'],cphase_data['v3'])
         cphase_chisq = (2.0/len(sigmacp)) * np.sum((1.0 - np.cos(cphase-model_cphase))/(sigmacp**2))

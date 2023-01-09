@@ -1,6 +1,6 @@
 import numpy as np
 from numpy import abs, sqrt, log, angle
-
+from scipy.sparse import block_diag
 def var_sys(var_a, var_b, var_c, var_u0, u):
     return var_a**2 * (u/var_u0)**var_c / (1+(u/var_u0)**(var_b+var_c))
 
@@ -107,7 +107,7 @@ def cphase_add_syserr(v1, v2, v3, v1err, v2err, v3err, cphased1, cphased2, cphas
     return closure_phase_from_bispectrum(bi, bisig)
 
 
-def cphase_uvpairs(cphase_data):
+def get_cphase_uvpairs(cphase_data):
     cphaseu1 = cphase_data['u1']
     cphaseu2 = cphase_data['u2']
     cphaseu3 = cphase_data['u3']
@@ -131,7 +131,7 @@ def cphase_uvdists(cphase_data):
     cphased3 = np.sqrt(cphaseu3**2+cphasev3**2)
     return cphased1, cphased2, cphased3
 
-def logcamp_uvpairs(logcamp_data):
+def get_logcamp_uvpairs(logcamp_data):
     campu1 = logcamp_data['u1']
     campu2 = logcamp_data['u2']
     campu3 = logcamp_data['u3']
@@ -242,9 +242,10 @@ def get_minimal_cphases(obs):
     """
     This method is adapted from code written by Dom Pesce (see also Blackburn et al, 2021)
     to find the minimal set of closure quantities at each time in an observation.
+
+    Radians are enforced.
     """
     print("Working on getting minimal cphases...")
-    fileout='cphases.txt'
     obs.reorder_tarr_snr()
     obs.add_cphase(count='max')
 
@@ -260,6 +261,9 @@ def get_minimal_cphases(obs):
 
     # loop over all timestamps
     obs_cphase_arr = []
+    uvecs = []
+    vvecs = []
+    design_mats = []
     for i in np.arange(0,N_times_cp,1):
 
         # get the current timestamp
@@ -377,6 +381,9 @@ def get_minimal_cphases(obs):
             bl_ant1_vec = t1_vis[ind_here_bl]
             bl_ant2_vec = t2_vis[ind_here_bl]
 
+            uvec = obs.data['u'][ind_here_bl]
+            vvec = obs.data['v'][ind_here_bl]
+
             # initialize the design matrix
             design_mat = np.zeros((keep.sum(),B_here))
 
@@ -440,25 +447,36 @@ def get_minimal_cphases(obs):
         print('========================================================================')
 
         obs_cphase_arr.append(obs_cphase)
+        design_mats.append(design_mat)
+        uvecs.append(uvec)
+        vvecs.append(vvec)
 
     # save an output cphase file
     obs_cphase_arr = np.concatenate(obs_cphase_arr)
-    np.savetxt(fileout,obs_cphase_arr,fmt='%26.26s')
-    print("Saved cphases to:"+str(fileout))
-    return obs_cphase_arr
+    obs_cphase_arr['cphase'] = obs_cphase_arr['cphase']*np.pi/180
+    uvec = np.concatenate(uvecs)
+    vvec = np.concatenate(vvecs)
+    uvpairs = np.vstack([uvec,vvec]).T
+    design_mat = block_diag(design_mats)
+    np.savetxt('cphases.txt',obs_cphase_arr,fmt='%26.26s')
+    print("Saved cphases to cphases.txt")
+    np.savetxt('cphase_design_matrix.txt',design_mat.toarray())
+    print("Saved cphase design matrix to cphase_design_matrix.txt")
+    np.savetxt('cphase_uvpairs.txt',uvpairs)
+    print("Saved cphase uvpairs to cphase_uvpairs.txt")
+    return obs_cphase_arr, design_mat, uvpairs
     # np.savetxt(fileout,obs_cphase_arr,fmt='%26.26s')
 
 
-def get_minimal_logcamps(obs):
+def get_minimal_logcamps(obs,debias=True):
     """
     This method is adapted from code written by Dom Pesce (see also Blackburn et al, 2021)
     to find the minimal set of closure quantities at each time in an observation.
     """
     print("Working on getting minimal logcamps...")
-    fileout='logcamps.txt'
     # compute a maximum set of log closure amplitudes
     obs.reorder_tarr_snr()
-    obs.add_logcamp(count='max')
+    obs.add_logcamp(count='max',debias=debias)
 
     # organize some info
     time_vis = obs.data['time']
@@ -472,6 +490,9 @@ def get_minimal_logcamps(obs):
 
     # loop over all timestamps
     obs_lca_arr = []
+    design_mats = []
+    uvecs = []
+    vvecs = []
     for i in np.arange(0,N_times_lca,1):
 
         # get the current timestamp
@@ -581,6 +602,9 @@ def get_minimal_logcamps(obs):
             bl_ant1_vec = t1_vis[ind_here_bl]
             bl_ant2_vec = t2_vis[ind_here_bl]
             
+            uvec = obs.data['u'][ind_here_bl]
+            vvec = obs.data['v'][ind_here_bl]
+
             # initialize the design matrix
             design_mat = np.zeros((keep.sum(),B_here))
 
@@ -634,9 +658,21 @@ def get_minimal_logcamps(obs):
         # print('========================================================================')
         
         obs_lca_arr.append(obs_lca)
+        design_mats.append(design_mat)
+        uvecs.append(uvec)
+        vvecs.append(vvec)
+
 
     # save an output logcamp file
     obs_lca_arr = np.concatenate(obs_lca_arr)
-    np.savetxt(fileout,obs_lca_arr,fmt='%26.26s')
-    print("Saved logcamps to:"+str(fileout))
-    return obs_lca_arr
+    uvec = np.concatenate(uvecs)
+    vvec = np.concatenate(vvecs)
+    uvpairs = np.vstack([uvec,vvec]).T
+    design_mat = block_diag(design_mats)
+    np.savetxt('logcamps.txt',obs_lca_arr,fmt='%26.26s')
+    print("Saved logcamps to logcamps.txt")
+    np.savetxt('logcamp_design_matrix.txt',design_mat.toarray())
+    print("Saved logcamp design matrix to logcamp_design_matrix.txt")
+    np.savetxt('logcamp_uvpairs.txt',uvpairs)
+    print("Saved logcamp uvpairs to logcamp_uvpairs.txt")
+    return obs_lca_arr, design_mat, uvpairs

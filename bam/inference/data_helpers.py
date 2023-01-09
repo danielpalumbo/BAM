@@ -454,6 +454,7 @@ def get_minimal_cphases(obs):
     # save an output cphase file
     obs_cphase_arr = np.concatenate(obs_cphase_arr)
     obs_cphase_arr['cphase'] = obs_cphase_arr['cphase']*np.pi/180
+    obs_cphase_arr['sigmacp'] = obs_cphase_arr['sigmacp']*np.pi/180
     uvec = np.concatenate(uvecs)
     vvec = np.concatenate(vvecs)
     uvpairs = np.vstack([uvec,vvec]).T

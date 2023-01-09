@@ -387,7 +387,7 @@ class KerrBam:
         self.nrmse = nrmse
         return nrmse
 
-    def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True, use_diag=True,logcamp_file='',cphase_file=''):
+    def build_likelihood(self, obs, data_types=['vis'], ttype='nfft', debias = True, compute_minimal=True,logcamp_file='',cphase_file=''):
         """
         Given an observation and a list of data product names, 
         return a likelihood function that accounts for each contribution. 
@@ -458,7 +458,7 @@ class KerrBam:
             print("Building amp likelihood!")
         if 'logcamp' in data_types:
             print("Building logcamp likelihood!")
-            if use_diag:
+            if compute_minimal:
                 if len(logcamp_file)>0:
                     logcamp_data = np.genfromtxt(logcamp_file,dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
                 else:
@@ -481,7 +481,7 @@ class KerrBam:
             Ncamp = len(logcamp)
         if 'cphase' in data_types:
             print("Building cphase likelihood!")
-            if use_diag:
+            if compute_minimal:
                 if len(cphase_file)>0:
                     cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
                 else:
@@ -691,11 +691,11 @@ class KerrBam:
         self.recent_sampler=sampler
         return sampler
 
-    def setup(self, obs, data_types=['vis'], bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None, use_diag=True, logcamp_file = '', cphase_file=''):
+    def setup(self, obs, data_types=['vis'], bound='multi', ttype='nfft', sample='auto', debias=True, pool=None, queue_size=None, compute_minimal=True, logcamp_file = '', cphase_file=''):
         self.source = obs.source
         self.modelim = eh.image.make_empty(self.npix*self.adap_fac,self.fov, ra=obs.ra, dec=obs.dec, rf= obs.rf, mjd = obs.mjd, source=obs.source)#, pulse=deltaPulse2D)
         ptform = self.build_prior_transform()
-        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias, use_diag=use_diag, logcamp_file=logcamp_file,cphase_file=cphase_file)
+        loglike = self.build_likelihood(obs, data_types=data_types, ttype=ttype, debias=debias, compute_minimal=compute_minimal, logcamp_file=logcamp_file,cphase_file=cphase_file)
         sampler = self.build_sampler(loglike,ptform, bound=bound, sample=sample, pool=pool, queue_size=queue_size)
         print("Ready to model with this BAM's recent_sampler! Call run_nested!")
         return sampler
@@ -902,13 +902,13 @@ class KerrBam:
         out.pa = 0
         return out
 
-    def logcamp_chisq(self,obs, debias=True,use_diag=True,logcamp_file=''):
+    def logcamp_chisq(self,obs, debias=True,compute_minimal=True,logcamp_file=''):
         if self.mode != 'fixed':
             print("Can only compute chisqs to fixed model!")
             return
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
-        if use_diag:
+        if compute_minimal:
             if len(logcamp_file)>0:
                 logcamp_data = np.genfromtxt(logcamp_file,dtype=None,names=['time','t1','t2','t3','t4','u1','u2','u3','u4','v1','v2','v3','v4','camp','sigmaca'])
             else:
@@ -931,7 +931,7 @@ class KerrBam:
             return
         if self.modelim is None:
             self.modelim = self.make_image(modelim=True)
-        if use_diag:
+        if compute_minimal:
             if len(cphase_file)>0:
                 cphase_data = np.genfromtxt(cphase_file,dtype=None,names=['time','t1','t2','t3','u1','u2','u3','v1','v2','v3','cphase','sigmacp'])
             else:

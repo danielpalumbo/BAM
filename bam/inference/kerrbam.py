@@ -35,20 +35,10 @@ class KerrBam:
     jfunc: a callable that takes (r, phi, jargs)
     if Bam is in modeling mode, jfunc should use pm functions
     '''
-    #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False):
-        if use_jax:
-            self.rtfunc = bam.inference.jax_kerrexact.kerr_exact_sep_lp
-        else:
-            self.rtfunc = bam.inference.kerrexact.kerr_exact_sep_lp         
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, source='', adap_fac =1, axisymmetric = True, optical_depth='thin',interp_order=1):
         self.interp_order = interp_order
-        self.compute_P = compute_P
-        self.compute_V = compute_V
-        self.optical_depth = optical_depth
         self.axisymmetric=axisymmetric
-        self.periodic=periodic
         self.source = source
-        self.polflux = polflux
         self.fov = fov
         self.fov_uas = fov/eh.RADPERUAS
         self.npix = npix
@@ -59,20 +49,10 @@ class KerrBam:
         self.jfunc = jfunc
         self.jarg_names = jarg_names
         self.jargs = jargs
-        # self.M = M
-        # self.D = D
         self.MoDuas = MoDuas
         self.a = a
         self.inc = inc
         self.PA = PA
-        self.beta = beta
-        self.chi = chi
-        self.eta = eta
-        self.iota = iota
-        self.spec = spec
-        self.alpha_zeta = alpha_zeta
-        self.h = h
-        self.polfrac = polfrac
         self.dEVPA = dEVPA
         self.f = f
         self.e = e

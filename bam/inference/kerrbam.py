@@ -631,7 +631,7 @@ class KerrBam:
 
 
     def KerrBam_from_eval(self, to_eval):
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], alpha_zeta=to_eval['alpha_zeta'], h = to_eval['h'], polfrac = to_eval['polfrac'], dEVPA = to_eval['dEVPA'], f=to_eval['f'], e=to_eval['e'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac, interp_order=self.interp_order)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], alpha_zeta=to_eval['alpha_zeta'], h = to_eval['h'], polfrac = to_eval['polfrac'], dEVPA = to_eval['dEVPA'], f=to_eval['f'], e=to_eval['e'],var_a = to_eval['var_a'], var_b = to_eval['var_b'], var_c = to_eval['var_c'], var_u0=to_eval['var_u0'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac, interp_order=self.interp_order,)
         return new
 
     def annealing_MAP(self, obs, data_types=['vis'], x0 = None, ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True, seed = 4):

@@ -117,6 +117,26 @@ def getlorentzboost(boost, chi):
     lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, 0],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, 0],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, 0],[0,0,0,1]])
     return lorentzboost
 
+
+def getlorentzboost_fromvec(boost, chi):
+    """
+    Return an array of lorentz boost matrices;
+    the outer dimension should correspond to th
+    """
+    gamma = 1 / np.sqrt(1 - boost**2) 
+    coschi = np.cos(chi)
+    sinchi = np.sin(chi)
+    zeros = np.zeros_like(boost)
+    ones = np.ones_like(boost)
+    lorentzboost = np.array([[gamma, -gamma*boost*coschi, -gamma*boost*sinchi, zeros],[-gamma*boost*coschi, (gamma-1)*coschi**2+1, (gamma-1)*sinchi*coschi, zeros],[-gamma*boost*sinchi, (gamma-1)*sinchi*coschi, (gamma-1)*sinchi**2+1, zeros],[zeros,zeros,zeros,ones]])
+    if boost.ndim==1:
+        return lorentzboost.T
+    elif boost.ndim==2:
+        return np.transpose(lorentzboost, (2,3,0,1))
+
+
+
+
 #these should return r, phi, tau, tau_tot
 
 
@@ -552,27 +572,99 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
 #from fluid properties (boost, chi, fluid_eta, iota)
 
 
-def sub_in_adap(size, mask, vals):
-    out = np.zeros(size)
-    out[mask]=vals
-    return out
+# jargs = boost, chi, fluid_eta, iota, spec, alpha_zeta, compute_V=False
+#requirements for an emissivity function:
+# whatever they want!
+# what do I give them?
+# r, phi, pr, phi, pz
 
-def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, alpha_zeta, compute_V=False):
+def example_jfunc(r, phi, emu,jargs):
+    """
+    Example emissivity function. 
+    Given r, phi, the BL ZAMO tetrad
+    """
+
+    boost, chi, fluid_eta, iota, spec, alpha_zeta = jargs
+    boostmatrix = getlorentzboost(-boost, chi)
+    #fluid frame tetrad
+    coordtransform = np.matmul(np.matmul(minkmetric, boostmatrix), emutetrad)
+    coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
+    rs = r
+    pupperfluid = np.matmul(coordtransform, plowers)
+    redshift = 1 / (pupperfluid[:,0,0])
+    lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
+    lp = np.real(np.nan_to_num(lp))
+    lps.append(lp)
+
+    #fluid frame polarization
+    pspatialfluid = pupperfluid[:,1:]
+    fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
+    # fupcopy = fupperfluid.copy()
+    fupperfluid[:,0,0] = fupperfluid[:,0,0] *redshift#/ pspatialnorm#would normally be a bmag here
+    fupperfluid[:,0,1] = fupperfluid[:,0,1] *redshift#/ pspatialnorm
+    fupperfluid[:,0,2] = fupperfluid[:,0,2] *redshift#/ pspatialnorm
+    sinzeta = np.sqrt(np.sum(fupperfluid[:,0,:]**2,axis=1))
+    # print(fupperfluid.shape)
+    # fupperfluid = fupperfluid / pspatialnorm
+    # print(pupperfluid[:,0,0]-pspatialnorm)
+    fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
+    fupperfluid = np.swapaxes(fupperfluid, 1,2)
+
+    if compute_V:
+        vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]#/pspatialnorm
+    else:
+        vvec = zeros
+    #apply the tetrad to get kerr f
+    kfuppers = np.matmul(coordtransforminv, fupperfluid)
+
+
+    kft = kfuppers[:,0,0]
+    kfr = kfuppers[:,1,0]
+    kftheta = kfuppers[:,2,0]
+    kfphi = kfuppers[:, 3,0]
+    spin = a
+    #kappa1 and kappa2
+    prekappa1 = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
+    prekappa2 = rasqsum * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
+    kappa1 = rs * prekappa1
+    kappa2 = -rs * prekappa2
+    # kappa1 = np.clip(np.real(kappa1), -20, 20)
+    
+    #screen appearance
+    nu = -(alpha + spin * np.sin(inc))
+
+    norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)/sinzeta**((alpha_zeta+1)/2)
+    ealpha = (beta * kappa2 - nu * kappa1) / norm  
+    ebeta = (beta * kappa1 + nu * kappa2) / norm 
+
+    qvec = -(ealpha**2 - ebeta**2)
+    uvec = -2*ealpha*ebeta
+    # qvec *= lp
+    # uvec *= lp
+    qvec = np.real(np.nan_to_num(qvec))
+    uvec = np.real(np.nan_to_num(uvec))
+    if compute_V:
+        vvec = np.real(np.nan_to_num(vvec))
+    redshift = np.real(np.nan_to_num(redshift))
+    ivec = np.sqrt(qvec**2+uvec**2)
+    # ivec = np.sqrt(qvec**2+uvec**2)
+
+def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, jargs, jfunc):
     """
     Given the r and phi coordinates impacted by photons, evaluate the all-space (that is, pre-envelope) emissivity model for
     Q, U, and V there.
     """
 
-    if fluid_eta is None:
-        fluid_eta = chi+np.pi
-    if alpha_zeta is None:
-        alpha_zeta = spec
-    bz = np.cos(iota)
-    beq = np.sqrt(1-bz**2)
-    br = beq*np.cos(fluid_eta)
-    bphi = beq*np.sin(fluid_eta)
+    # if fluid_eta is None:
+    #     fluid_eta = chi+np.pi
+    # if alpha_zeta is None:
+    #     alpha_zeta = spec
+    # bz = np.cos(iota)
+    # beq = np.sqrt(1-bz**2)
+    # br = beq*np.cos(fluid_eta)
+    # bphi = beq*np.sin(fluid_eta)
     
-    bvec = np.array([br, bphi, bz])
+    # bvec = np.array([br, bphi, bz])
     ivecs = []
     qvecs = []
     uvecs = []
@@ -609,8 +701,6 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         pt_low = -1*np.ones_like(r)
         pr_low = signpr * rtbigR/bigDelta
 
-        # pr_low[pr_low>10] = 10
-        # pr_low[pr_low<-10] = -10
         pphi_low = lam
         ptheta_low = signptheta*rteta
 
@@ -627,74 +717,14 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         # praised.append([pt_up, pr_up, pphi_up, ptheta_up])
         #now everything to generate polarization
         
+        #the emutetrad relates BL coordinates to the ZAMO
         emutetrad = np.array([[rtXiDelta, zeros, zeros, littleomega*rtXiDelta], [zeros, np.sqrt(bigDelta)/r, zeros, zeros], [zeros, zeros, zeros, r/np.sqrt(bigXi)], [zeros, zeros, -1/r, zeros]])
         emutetrad = np.transpose(emutetrad,(2,0,1))
-        boostmatrix = getlorentzboost(-boost, chi)
-        #fluid frame tetrad
-        coordtransform = np.matmul(np.matmul(minkmetric, boostmatrix), emutetrad)
-        coordtransforminv = np.transpose(np.matmul(boostmatrix, emutetrad), (0,2, 1))
-        rs = r
-        pupperfluid = np.matmul(coordtransform, plowers)
-        redshift = 1 / (pupperfluid[:,0,0])
-        lp = np.abs(pupperfluid[:,0,0]/pupperfluid[:,3,0])
-        lp = np.real(np.nan_to_num(lp))
-        lps.append(lp)
 
-        #fluid frame polarization
-        pspatialfluid = pupperfluid[:,1:]
-        # print(pspatialfluid)
-        # print(pspatialfluid.shape)
-        # pspatialnorm = np.sqrt(np.sum(pspatialfluid[:,:,0]**2,axis=1))
-        fupperfluid = np.cross(pspatialfluid, bvec, axisa = 1)
-        # fupcopy = fupperfluid.copy()
-        fupperfluid[:,0,0] = fupperfluid[:,0,0] *redshift#/ pspatialnorm#would normally be a bmag here
-        fupperfluid[:,0,1] = fupperfluid[:,0,1] *redshift#/ pspatialnorm
-        fupperfluid[:,0,2] = fupperfluid[:,0,2] *redshift#/ pspatialnorm
-        sinzeta = np.sqrt(np.sum(fupperfluid[:,0,:]**2,axis=1))
-        # print(fupperfluid.shape)
-        # fupperfluid = fupperfluid / pspatialnorm
-        # print(pupperfluid[:,0,0]-pspatialnorm)
-        fupperfluid = np.insert(fupperfluid, 0, 0, axis=2)# / (np.linalg.norm(pupperfluid[1:]))
-        fupperfluid = np.swapaxes(fupperfluid, 1,2)
+        #from here on out, everything depends on what the user desires
 
-        if compute_V:
-            vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]/pspatialnorm
-        else:
-            vvec = zeros
-        #apply the tetrad to get kerr f
-        kfuppers = np.matmul(coordtransforminv, fupperfluid)
-
-
-        kft = kfuppers[:,0,0]
-        kfr = kfuppers[:,1,0]
-        kftheta = kfuppers[:,2,0]
-        kfphi = kfuppers[:, 3,0]
-        spin = a
-        #kappa1 and kappa2
-        prekappa1 = (pt * kfr - pr * kft) + spin * (pr * kfphi - pphi * kfr)
-        prekappa2 = rasqsum * (pphi * kftheta - ptheta * kfphi) - spin * (pt * kftheta - ptheta * kft)
-        kappa1 = rs * prekappa1
-        kappa2 = -rs * prekappa2
-        # kappa1 = np.clip(np.real(kappa1), -20, 20)
+        ivec, qvec, uvec, vvec = jfunc(...)
         
-        #screen appearance
-        nu = -(alpha + spin * np.sin(inc))
-
-        norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)/sinzeta**((alpha_zeta+1)/2)
-        ealpha = (beta * kappa2 - nu * kappa1) / norm  
-        ebeta = (beta * kappa1 + nu * kappa2) / norm 
-
-        qvec = -(ealpha**2 - ebeta**2)
-        uvec = -2*ealpha*ebeta
-        
-        # qvec *= lp
-        # uvec *= lp
-        qvec = np.real(np.nan_to_num(qvec))
-        uvec = np.real(np.nan_to_num(uvec))
-        if compute_V:
-            vvec = np.real(np.nan_to_num(vvec))
-        redshift = np.real(np.nan_to_num(redshift))
-        ivec = np.sqrt(qvec**2+uvec**2)
         ivecs.append(ivec)
         qvecs.append(qvec)
         uvecs.append(uvec)
@@ -705,14 +735,18 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
     return ivecs, qvecs, uvecs, vvecs, redshifts, lps
 
 
+def sub_in_adap(size, mask, vals):
+    out = np.zeros(size)
+    out[mask]=vals
+    return out
 
 
-def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, alpha_zeta, adap_fac = 1, compute_V=False, axisymmetric=True):
+def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, jargs, adap_fac = 1, compute_V=False, axisymmetric=True):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
     rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, nmin=0)
-    ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, alpha_zeta, compute_V=compute_V)
+    ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, jargs, compute_V=compute_V)
     if adap_fac > 1 and nmax > 0:
         for n in range(1,nmax+1):
             newsize = (adap_fac**n)**2*len(mudists[0])

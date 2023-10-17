@@ -36,6 +36,7 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, source='', adap_fac =1, axisymmetric = True, optical_depth='thin',interp_order=1):
+        self.rtfunc = bam.inference.kerrexact.ray_trace_all
         self.interp_order = interp_order
         self.axisymmetric=axisymmetric
         self.source = source
@@ -57,7 +58,7 @@ class KerrBam:
         self.f = f
         self.e = e
         self.var_a = var_a
-        self.var_b = var_b
+        self.var_b = var_b 
         self.var_c = var_c
         self.var_u0 = var_u0
         self.nmax = nmax
@@ -77,14 +78,14 @@ class KerrBam:
         # self.imxvec = -self.rho_uas*np.cos(self.varphivec)
        
         # self.imyvec = self.rho_uas*np.sin(self.varphivec)
-        if any([isiterable(i) for i in [MoDuas, a, inc, zbl, PA, f, beta, chi, iota, e, spec, alpha_zeta, h, polfrac, dEVPA]+jargs]):
+        if any([isiterable(i) for i in [MoDuas, a, inc, zbl, PA, f, e, dEVPA]+jargs]):
             mode = 'model'
         else:
             mode = 'fixed' 
         self.mode = mode
         self.noise_param_names = ['f','e','var_a','var_b','var_c','var_u0']
-        self.all_params = [MoDuas, a, inc, zbl, PA, beta, chi,eta, iota, spec, alpha_zeta, h, polfrac, dEVPA, f, e, var_a, var_b, var_c, var_u0]+jargs
-        self.all_names = ['MoDuas','a', 'inc','zbl','PA','beta','chi','eta','iota','spec','alpha_zeta','h','polfrac','dEVPA','f','e','var_a','var_b','var_c','var_u0']+jarg_names
+        self.all_params = [MoDuas, a, inc, zbl, PA,  dEVPA, f, e, var_a, var_b, var_c, var_u0]+jargs
+        self.all_names = ['MoDuas','a', 'inc','zbl','PA','dEVPA','f','e','var_a','var_b','var_c','var_u0']+jarg_names
         self.imparam_names = [i for i in self.all_names if i not in self.noise_param_names+jarg_names]
         self.imparam_names = self.imparam_names + ['jargs']
         self.all_param_dict = dict()
@@ -99,27 +100,14 @@ class KerrBam:
         self.modeled_param_dict = dict()
         for i in range(len(self.modeled_names)):
             self.modeled_param_dict[self.modeled_names[i]]=self.modeled_params[i]
-
+s
         if self.periodic:
             print("Periodic priors are not currently functional. Reverting to non-periodic.")
             self.periodic = False
-        # self.periodic_names = []
-        # self.periodic_indices=[]
-        # if self.periodic:
-        #     for i in ['PA','chi']:
-        #         if i in self.modeled_names:
-        #             bounds = self.modeled_params[self.modeled_names.index(i)]
-        #             if np.isclose(np.exp(1j*bounds[0]),np.exp(1j*bounds[1]),rtol=1e-12):
-        #                 print("Found periodic prior on "+str(i))
-        #                 self.periodic_names.append(i)
-        #                 self.periodic_indices.append(self.modeled_names.index(i))
         self.model_dim = len(self.modeled_names)
 
         if self.mode == 'fixed':
-            self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.beta, self.chi, self.eta, self.iota, self.spec, self.alpha_zeta, self.h, self.polfrac, self.dEVPA, self.jargs]
-            # self.rhovec = self.rho_uas / self.MoDuas
-            # self.rhovec = D/(M*Mscale*Gpercsq*self.rho_uas)
-            # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
+            self.imparams = [self.MoDuas, self.a, self.inc, self.zbl, self.PA, self.dEVPA, self.jargs]
             print("Fixed Bam: precomputing all subimages.")
             self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
         self.modelim = None
@@ -144,12 +132,12 @@ class KerrBam:
             print("Can't directly evaluate kerr_exact in model mode!")
             return
 
-        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, alpha_zeta, h, polfrac, dEVPA, jargs = self.imparams
+        MoDuas, a, inc, zbl, PA, dEVPA, jargs = self.imparams
 
         
         #convert rho_uas to gravitational units
         # rhovec = self.rho_uas/MoDuas
-        return self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)        
+        return self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
 
 
 
@@ -159,13 +147,17 @@ class KerrBam:
         compute the resulting i, q, u, v
         """
         # print(imparams)
-        MoDuas, a, inc, zbl, PA, beta, chi, eta, iota, spec, alpha_zeta, h, polfrac, dEVPA, jargs = imparams
-
+        MoDuas, a, inc, zbl, PA, dEVPA, jargs = imparams
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
-        if not(self.compute_P) or not(self.compute_V):
-            zvecs = [np.zeros_like(rvecs[n]) for n in range(self.nmax+1)]
+        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, self.jfunc, jargs, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
+        
+        #want something like
+        rvecs, phivecs, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, adap_fac = self.adap_fac, axisymmetric=self.aximmetric)
+        ivecs, qvecs, uvecs, vvecs 
+
+        # if not(self.compute_P) or not(self.compute_V):
+        #     zvecs = [np.zeros_like(rvecs[n]) for n in range(self.nmax+1)]
         if self.optical_depth == 'varying' or self.optical_depth == 'thick':
             rvecs = rescale_veclist(rvecs,order=self.interp_order,anti_aliasing=False)
             if not self.axisymmetric:
@@ -728,25 +720,7 @@ class KerrBam:
 
         self.recent_sampler.run_nested(nlive_init=0, nlive_batch=nlive_batch,maxiter_init=maxiter,maxcall_init=maxcall,dlogz_init=dlogz,logl_max_init=logl_max, n_effective_init=n_effective, print_progress=print_progress, print_func=None, save_bounds=True, maxbatch=maxbatch)
 
-        # print("Adding live points for dynamic nested sampling.")
-        # for itf, resf in enumerate(self.recent_sampler.sample_batch(nlive_new=nlive_batch,)):
-        #     # print current dlogz
-        #     if (time.time()-tsave)/3600 > save_every_hr:
-        #         print('current dlogz = ',resf[-1])
-
-        #         # save trace plot
-        #         tfig, taxes = dyplot.traceplot(self.recent_sampler.results)
-        #         plt.savefig(outname+'_dynamic_trace_plot_'+str(count).zfill(3)+'.png',dpi=300)
-        #         plt.close()
-
-        #         # save current sampler state
-        #         rstate = sampler.rstate
-        #         collect = [sampler,rstate]
-        #         pickle.dump(collect,open(outname+'_dynamic_sampler_'+str(count).zfill(3)+'.p','wb'),protocol=pkl.HIGHEST_PROTOCOL)
-
-        #         # increment count
-        #         count += 1
-        #         tsave = time.time()
+        
         self.recent_results = self.recent_sampler.results
         return self.recent_results
 

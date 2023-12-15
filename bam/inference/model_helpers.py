@@ -4,6 +4,8 @@ try:
 except ImportError: 
     from collections import Iterable
 
+from scipy.stats import rice as scipy_rice
+
 Gpercsq = 6.67e-11 / (3e8)**2
 M87_ra = 12.513728717168174
 M87_dec = 12.39112323919932
@@ -21,6 +23,18 @@ SgrA_MoD = Gpercsq*SgrA_mass / SgrA_dist
 SgrA_MoDuas = SgrA_MoD/RADPERUAS
 
 from skimage.transform import rescale, resize
+
+def rice(nu, sigma, x):
+
+    # val= x/sigma**2 * np.exp(-(x**2+nu**2)/(2*sigma**2))*iv(0,x*nu/sigma**2)
+    # # print(val)
+    # nanmask = np.isnan(val)
+    # if np.any(nanmask):
+    #     print(nu[nanmask])
+    #     print(sigma[nanmask])
+    #     print(x[nanmask])
+    val = scipy_rice.pdf(x, nu/sigma,scale=sigma)
+    return val
 
 
 def rescale_veclist(veclist,mode='edge',order=1,anti_aliasing=True):

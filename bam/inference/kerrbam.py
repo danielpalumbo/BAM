@@ -4,7 +4,7 @@ import numpy as np
 import ehtim as eh
 import matplotlib.pyplot as plt
 import random
-from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix, rescale_veclist
+from bam.inference.model_helpers import Gpercsq, M87_ra, M87_dec, M87_mass, M87_dist, M87_inc, isiterable, get_rho_varphi_from_FOV_npix, rescale_veclist, rice
 from bam.inference.data_helpers import make_log_closure_amplitude, amp_add_syserr, vis_add_syserr, logcamp_add_syserr, cphase_add_syserr, get_cphase_uvpairs, cphase_uvdists, get_logcamp_uvpairs, logcamp_uvdists, get_camp_amp_sigma, get_cphase_vis_sigma, var_sys, get_minimal_logcamps, get_minimal_cphases
 from numpy import arctan2, sin, cos, exp, log, clip, sqrt,sign
 import dynesty
@@ -36,11 +36,12 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False, rice_amps=False):
         if use_jax:
             self.rtfunc = bam.inference.jax_kerrexact.kerr_exact_sep_lp
         else:
-            self.rtfunc = bam.inference.kerrexact.kerr_exact_sep_lp         
+            self.rtfunc = bam.inference.kerrexact.kerr_exact_sep_lp   
+        self.rice_amps = rice_amps      
         self.interp_order = interp_order
         self.compute_P = compute_P
         self.compute_V = compute_V
@@ -591,13 +592,17 @@ class KerrBam:
                     _, sd = amp_add_syserr(amp, sigma, fractional=to_eval['f'], additive = to_eval['e'], var_a = to_eval['var_a'], var_b=to_eval['var_b'], var_c=to_eval['var_c'], var_u0=to_eval['var_u0'], u = uvdists)
                 else:
                     sd = sigma
-                # sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
-                model_amp = np.abs(self.modelim_ivis(ampuv, ttype=ttype))
-                # model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
-                # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
-                amplike = -0.5*np.sum((model_amp-amp)**2 / sd**2)
-                ln_norm = amplike-np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
-                out+=ln_norm
+                model_amp = np.abs(self.modelim_ivis(ampuv, ttype=ttype))    
+                if self.rice_amps:
+                    ricelike = np.sum(np.log(rice(model_amp,sd,amp)))
+                    out += ricelike
+                else:
+                    # sd = sqrt(sigma**2.0 + (to_eval['f']*amp)**2.0+to_eval['e']**2.0)
+                    # model_amp = np.abs(self.vis(ivec, rotimxvec, rotimyvec, u, v))
+                    # amplike = -1/Namp * np.sum(np.abs(model_amp-amp)**2 / sd**2)
+                    amplike = -0.5*np.sum((model_amp-amp)**2 / sd**2)
+                    ln_norm = amplike-np.sum(np.log((2.0*np.pi)**0.5 * sd)) 
+                    out+=ln_norm
             if 'logcamp' in data_types:
                 if compute_minimal:
                     model_logcamp = logcamp_design_mat.dot(np.log(np.abs(self.modelim_ivis(logcamp_uvpairs,ttype=ttype))))

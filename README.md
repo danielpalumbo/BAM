@@ -1,3 +1,3 @@
-# 3DMC
+# BAM
 
 This is a model fitting package for modeling emissivity distributions around black holes.

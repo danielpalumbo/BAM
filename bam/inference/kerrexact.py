@@ -120,7 +120,7 @@ def getlorentzboost(boost, chi):
 #these should return r, phi, tau, tau_tot
 
 
-def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, nmin=0):
+def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, stationary=True,nmin=0):
     """
     Case 1: r1, r2, r3, r4 are real, r2<rp<r3.
     Case 2: r1, r2, r3, r4 are real and less than rp.
@@ -129,7 +129,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     """
     if len(sb) == 0:
         # print("No support in case "+str(case))
-        return [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)]
+        return [[] for n in range(nmin, nmax+1)],[[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)], [[] for n in range(nmin, nmax+1)]
     r21 = r2-r1
     r31 = r3-r1
     r32 = r3-r2
@@ -147,17 +147,22 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
     m+= nmin
     rvecs = []
     phivecs = []
+    tvecs = []
     Irmasks = []
     signprs = []
     Fobs_arg = np.arcsin(np.cos(inc)/np.sqrt(up))
     Fobs = ellipkinc(Fobs_arg, urat)
-
+        
     if not axisymmetric:
         a2um = a**2*um
         Gph_o = -1/np.sqrt(-a2um) * ellip_pi_arr(up, Fobs_arg, urat)
         # print(np.any(Gph_o<0))
         Gth_o = -1/np.sqrt(-a2um) * Fobs
 
+    if not stationary:
+        # Gt_o = 
+        Eobs = ellipeinc(Fobs_arg, urat)
+        Gt_o = 2*up/np.sqrt(-um*a**2)* (Eobs - Fobs)/(2*urat) # GL 19a, 31
 
 
     # sb = np.sign(beta)
@@ -265,7 +270,22 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 phi = phi_o + I_phi + lam * Gph
                 phi[~Irmask] = np.nan
                 phivecs.append(np.nan_to_num(phi))
+            if not stationary:
+                # get I_phi, I_t, I_sigma
+                #I_0 = -tausteps
+                I0 = -tau
+                #I_phi = (2*a/(rplus-rminus))*((rplus - 0.5*a*lam)*I_p - (rminus - 0.5*a*lam)*I_m) # B1
+                I_tA = (4/(rp-rm))*((rp**2 - 0.5*a*lam*rp)*Ip - (rm**2 - 0.5*a*lam*rm)*Im) # B2
+                It = I_tA + 4*I0 + 2*I1 + I2
+                # I_sig = I_2
 
+                #finish Gt calculation
+                Gt = -(2*up/np.sqrt(-um*a**2)* (ellipeinc(Phi_tau,urat) - ellipkinc(Phi_tau,urat))/(2*urat)) - sb * Gt_o
+
+
+                t = It+a**2*Gt
+                tvecs.append(np.nan_to_num(t,nan=-1))
+                #return (r_s, I_phi, I_t, I_sig)
     if case == 3:
         Agl = np.real(np.sqrt(r32*r42))
         Bgl = np.real(np.sqrt(r31*r41))
@@ -383,11 +403,27 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 phi = phi_o + I_phi + lam * Gph
                 phi[~Irmask] = np.nan
                 phivecs.append(np.nan_to_num(phi))
+            if not stationary:
+                # get I_phi, I_t, I_sigma
+                #I_0 = -tausteps
+                I0 = -tau
+                #I_phi = (2*a/(rplus-rminus))*((rplus - 0.5*a*lam)*I_p - (rminus - 0.5*a*lam)*I_m) # B1
+                I_tA = (4/(rp-rm))*((rp**2 - 0.5*a*lam*rp)*Ip - (rm**2 - 0.5*a*lam*rm)*Im) # B2
+                It = I_tA + 4*I0 + 2*I1 + I2
+                # I_sig = I_2
+
+                #finish Gt calculation
+                Gt = -(2*up/np.sqrt(-um*a**2)* (ellipeinc(Phi_tau,urat) - ellipkinc(Phi_tau,urat))/(2*urat)) - sb * Gt_o
+
+
+                t = It+a**2*Gt
+                tvecs.append(np.nan_to_num(t,nan=-1))
+
     if case ==4:
         pass
-    return rvecs, phivecs, Irmasks, signprs
+    return rvecs, phivecs, tvecs, Irmasks, signprs
 
-def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, nmin=0, prev_Irmask = None):
+def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, stationary=True, nmin=0, prev_Irmask = None):
     if np.isclose(a,0):
         a = 1e-6
     ns = range(nmin, nmax+1)
@@ -454,21 +490,23 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
 
     #for now, don't raytrace case 4
 
-    rvecs1, phivecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
-    rvecs2, phivecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
-    rvecs3, phivecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
+    rvecs1, phivecs1, tvecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin)
+    rvecs2, phivecs2, tvecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin)
+    rvecs3, phivecs3, tvecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin)
     # rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,rm,rp,sb[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
 
 
     #stitch together cases
     all_rvecs = []
     all_phivecs = []
+    all_tvecs = []
     all_Irmasks = []
     all_signprs = []
     for ni in range(len(ns)):#nmin, nmax+1):
         # n = ns[ni]
         r_all = np.zeros_like(rho)
         phi_all = np.zeros_like(rho)
+        t_all = np.zeros_like(rho)
         Irmask_all = np.ones_like(rho)
         signpr_all = np.ones_like(rho)
         r_all[case1]=rvecs1[ni]
@@ -480,8 +518,13 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
             phi_all[case1]=phivecs1[ni]
             phi_all[case2]=phivecs2[ni]
             phi_all[case3]=phivecs3[ni]
+        if not stationary:
+            t_all[case1]=tvecs1[ni]
+            t_all[case2]=tvecs2[ni]
+            t_all[case3]=tvecs3[ni]
         # phi_all[case4]=phivecs4[ni]
         all_phivecs.append(phi_all)
+        all_tvecs.append(t_all)
         Irmask_all[case1]=Irmasks1[ni]
         Irmask_all[case2]=Irmasks2[ni]
         Irmask_all[case3]=Irmasks3[ni]
@@ -513,6 +556,7 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
             else:
                 xdim = int(np.sqrt(npix))
             Irmask = Irmask.reshape((xdim,xdim))
+            #convolve by a unit square kernel to add "safety" pixels around the adaptive region
             Irmask = convolve2d(Irmask, kernel,mode='same')
             Irmask = rescale(Irmask, adap_fac, order=0)
             Irmask = np.array(Irmask,dtype=bool).flatten()
@@ -528,9 +572,10 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
             # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
             # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             prev_Irmask = Irmask
-            sub_rvecs, sub_phivecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, sub_masks = ray_trace_all(submudists, MoDuas, subvarphi, inc, a, min(nmax,n+1), axisymmetric=axisymmetric, nmin=n, adap_fac=1, prev_Irmask=prev_Irmask)
+            sub_rvecs, sub_phivecs, sub_tvecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, sub_masks = ray_trace_all(submudists, MoDuas, subvarphi, inc, a, min(nmax,n+1), axisymmetric=axisymmetric, stationary=stationary, nmin=n, adap_fac=1, prev_Irmask=prev_Irmask)
             all_rvecs[ni]=sub_rvecs[0].flatten()
             all_phivecs[ni]=sub_phivecs[0].flatten()
+            all_tvecs[ni]=sub_tvecs[0].flatten()
             all_signprs[ni]=sub_signprs[0].flatten()
             all_signpthetas[ni]=sub_signpthetas[0].flatten()
             lams[ni] = sub_lams[0].flatten()
@@ -546,7 +591,7 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
             #     print('sub_masks[1]',sub_masks[1].shape)
     else:
         adap_masks = all_Irmasks
-    return all_rvecs, all_phivecs, all_signprs, all_signpthetas, alphas, betas, lams, etas, adap_masks
+    return all_rvecs, all_phivecs, all_tvecs, all_signprs, all_signpthetas, alphas, betas, lams, etas, adap_masks
 
 #want to disentangle ray-tracing quantities (mudists, fov_uas, MoDuas, varphi, inc, a, nmax, adap_fac, axisymmetric)
 #from fluid properties (boost, chi, fluid_eta, iota)
@@ -707,21 +752,22 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
 
 
 
-def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, alpha_zeta, adap_fac = 1, compute_V=False, axisymmetric=True):
+def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, alpha_zeta, adap_fac = 1, compute_V=False, axisymmetric=True, stationary=True):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
-    rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, nmin=0)
+    rvecs, phivecs, tvecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, stationary=stationary, nmin=0)
     ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, alpha_zeta, compute_V=compute_V)
     if adap_fac > 1 and nmax > 0:
         for n in range(1,nmax+1):
             newsize = (adap_fac**n)**2*len(mudists[0])
             rvecs[n] = sub_in_adap(newsize, adap_masks[n], rvecs[n])
             phivecs[n] = sub_in_adap(newsize, adap_masks[n], phivecs[n])
+            tvecs[n] = sub_in_adap(newsize, adap_masks[n], tvecs[n])
             ivecs[n] = sub_in_adap(newsize, adap_masks[n], ivecs[n])
             qvecs[n] = sub_in_adap(newsize, adap_masks[n], qvecs[n])
             uvecs[n] = sub_in_adap(newsize, adap_masks[n], uvecs[n])
             vvecs[n] = sub_in_adap(newsize, adap_masks[n], vvecs[n])
             redshifts[n] = sub_in_adap(newsize, adap_masks[n], redshifts[n])
             lps[n] = sub_in_adap(newsize, adap_masks[n], lps[n])
-    return rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps
+    return rvecs, phivecs, tvecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps

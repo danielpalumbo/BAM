@@ -36,7 +36,7 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False, rice_amps=False):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, stationary = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False, rice_amps=False, times=np.array([0])):
         if use_jax:
             self.rtfunc = bam.inference.jax_kerrexact.kerr_exact_sep_lp
         else:
@@ -47,6 +47,8 @@ class KerrBam:
         self.compute_V = compute_V
         self.optical_depth = optical_depth
         self.axisymmetric=axisymmetric
+        self.stationary=stationary
+        self.times = times
         self.periodic=periodic
         self.source = source
         self.polflux = polflux
@@ -121,6 +123,13 @@ class KerrBam:
         for i in range(len(self.modeled_names)):
             self.modeled_param_dict[self.modeled_names[i]]=self.modeled_params[i]
 
+        if not self.stationary:
+            if self.mode =='model':
+                print("Can't yet fit data with a slowlight model. Turning off slowlight")
+                self.stationary=True
+            if self.axisymmetric:
+                print("Non-stationary flow requires non-axisymmetry for now.")
+                self.axisymmetric = True
         if self.periodic:
             print("Periodic priors are not currently functional. Reverting to non-periodic.")
             self.periodic = False
@@ -142,7 +151,10 @@ class KerrBam:
             # self.rhovec = D/(M*Mscale*Gpercsq*self.rho_uas)
             # if self.exacttype=='interp' and all([not(self.all_interps[i] is None) for i in range(len(self.all_interps))]):
             print("Fixed Bam: precomputing all subimages.")
-            self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
+            if self.stationary:
+                self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
+            else:
+                self.frames = self.compute_image(self.imparams)
         self.modelim = None
         print("Finished building KerrBam! in "+ self.mode +" mode!")#" with exacttype " +self.exacttype)
 
@@ -170,7 +182,9 @@ class KerrBam:
         
         #convert rho_uas to gravitational units
         # rhovec = self.rho_uas/MoDuas
-        return self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)        
+        print("Warning: primitives have changed recently.")
+        print("Returning: rvecs, phivecs, tvecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps.")
+        return self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, stationary=self.stationary, compute_V = self.compute_V)        
 
 
 
@@ -184,13 +198,15 @@ class KerrBam:
 
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, compute_V = self.compute_V)
+        rvecs, phivecs, tvecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, stationary=self.stationary, compute_V = self.compute_V)
         if not(self.compute_P) or not(self.compute_V):
             zvecs = [np.zeros_like(rvecs[n]) for n in range(self.nmax+1)]
         if self.optical_depth == 'varying' or self.optical_depth == 'thick':
             rvecs = rescale_veclist(rvecs,order=self.interp_order,anti_aliasing=False)
             if not self.axisymmetric:
                 phivecs = rescale_veclist(phivecs,order=self.interp_order,anti_aliasing=False)
+            if not self.stationary:
+                tvecs = rescale_veclist(tvecs,order=self.interp_order,anti_aliasing=False)
             redshifts = rescale_veclist(redshifts,order=self.interp_order,anti_aliasing=False)
             lps = rescale_veclist(lps,order=self.interp_order,anti_aliasing=False)
             ivecs = rescale_veclist(ivecs,order=self.interp_order,anti_aliasing=False)
@@ -199,62 +215,120 @@ class KerrBam:
                 uvecs = rescale_veclist(uvecs,order=self.interp_order,anti_aliasing=False)
             if self.compute_V:
                 vvecs = rescale_veclist(vvecs,order=self.interp_order,anti_aliasing=False)
-        for n in reversed(range(self.nmax+1)):
-            if self.axisymmetric:
-                jfunc_vals = self.jfunc(rvecs[n], jargs) 
-            else:
-                jfunc_vals = self.jfunc(rvecs[n],phivecs[n],jargs)
+        if self.stationary:
 
-            profile = jfunc_vals*redshifts[n]**(3+spec)
+            for n in reversed(range(self.nmax+1)):
+                if self.axisymmetric:
+                    jfunc_vals = self.jfunc(rvecs[n], jargs) 
+                else:
+                    jfunc_vals = self.jfunc(rvecs[n],phivecs[n],jargs)
 
+                profile = jfunc_vals*redshifts[n]**(3+spec)
+
+                if self.optical_depth == 'thin':
+                    profile = profile * lps[n]
+                elif self.optical_depth == 'varying':
+                    tau = h*lps[n]
+                    exptau = np.exp(-tau)
+                    profile = profile * (1-exptau)
+                    if n < self.nmax:
+                        ivecs[n+1] *= exptau
+                        if self.compute_P:
+                            qvecs[n+1] *= exptau
+                            uvecs[n+1] *= exptau
+                        if self.compute_V:
+                            vvecs[n+1] *= exptau
+                elif self.optical_depth == 'thick':
+                    #this is the optically thick case, where h is a constant
+                    pass
+                else:
+                    print("Unrecognized optical depth prescription! Defaulting to optically thick.")
+                    
+                if self.polflux:
+                    ivecs[n]*=profile
+                else:
+                    ivecs[n] = profile
+                    qvecs[n] = zvecs[n]
+                    uvecs[n] = zvecs[n]
+                    vvecs[n] = zvecs[n]
+                if self.compute_P:
+                    qvecs[n]*=profile
+                    uvecs[n]*=profile
+                if self.compute_V:
+                    vvecs[n]*=profile
             if self.optical_depth == 'thin':
-                profile = profile * lps[n]
-            elif self.optical_depth == 'varying':
-                tau = h*lps[n]
-                exptau = np.exp(-tau)
-                profile = profile * (1-exptau)
-                if n < self.nmax:
-                    ivecs[n+1] *= exptau
-                    if self.compute_P:
-                        qvecs[n+1] *= exptau
-                        uvecs[n+1] *= exptau
-                    if self.compute_V:
-                        vvecs[n+1] *= exptau
-            elif self.optical_depth == 'thick':
-                #this is the optically thick case, where h is a constant
-                pass
-            else:
-                print("Unrecognized optical depth prescription! Defaulting to optically thick.")
-                
-            if self.polflux:
-                ivecs[n]*=profile
-            else:
-                ivecs[n] = profile
-                qvecs[n] = zvecs[n]
-                uvecs[n] = zvecs[n]
-                vvecs[n] = zvecs[n]
+                ivecs = rescale_veclist(ivecs,order=self.interp_order,anti_aliasing=False)
+                qvecs = rescale_veclist(qvecs,order=self.interp_order,anti_aliasing=False)
+                uvecs = rescale_veclist(uvecs,order=self.interp_order,anti_aliasing=False)
+                vvecs = rescale_veclist(vvecs,order=self.interp_order,anti_aliasing=False)
+            tf = np.sum(ivecs)
+            ivecs = [ivec*zbl/tf for ivec in ivecs]
             if self.compute_P:
-                qvecs[n]*=profile
-                uvecs[n]*=profile
+                qvecs = [qvec*zbl/tf*polfrac for qvec in qvecs]
+                uvecs = [uvec*zbl/tf*polfrac for uvec in uvecs]
+                if not np.isclose(0.,dEVPA):
+                    pvecs = [(qvecs[i]+1j*uvecs[i])*np.exp(2j*dEVPA) for i in range(len(qvecs))]
+                    qvecs = [np.real(pvec) for pvec in pvecs]
+                    uvecs = [np.imag(pvec) for pvec in pvecs]
             if self.compute_V:
-                vvecs[n]*=profile
-        if self.optical_depth == 'thin':
-            ivecs = rescale_veclist(ivecs,order=self.interp_order,anti_aliasing=False)
-            qvecs = rescale_veclist(qvecs,order=self.interp_order,anti_aliasing=False)
-            uvecs = rescale_veclist(uvecs,order=self.interp_order,anti_aliasing=False)
-            vvecs = rescale_veclist(vvecs,order=self.interp_order,anti_aliasing=False)
-        tf = np.sum(ivecs)
-        ivecs = [ivec*zbl/tf for ivec in ivecs]
-        if self.compute_P:
-            qvecs = [qvec*zbl/tf*polfrac for qvec in qvecs]
-            uvecs = [uvec*zbl/tf*polfrac for uvec in uvecs]
-            if not np.isclose(0.,dEVPA):
-                pvecs = [(qvecs[i]+1j*uvecs[i])*np.exp(2j*dEVPA) for i in range(len(qvecs))]
-                qvecs = [np.real(pvec) for pvec in pvecs]
-                uvecs = [np.imag(pvec) for pvec in pvecs]
-        if self.compute_V:
-            vvecs = [vvec*zbl/tf*polfrac for vvec in vvecs]
-        return ivecs, qvecs, uvecs, vvecs 
+                vvecs = [vvec*zbl/tf*polfrac for vvec in vvecs]
+            return ivecs, qvecs, uvecs, vvecs 
+        else:
+            out = []
+            for time in self.times:
+                for n in reversed(range(self.nmax+1)):
+                    jfunc_vals = self.jfunc(rvecs[n],phivecs[n],tvecs[n],jargs)
+                    profile = jfunc_vals*redshifts[n]**(3+spec)
+
+                    if self.optical_depth == 'thin':
+                        profile = profile * lps[n]
+                    elif self.optical_depth == 'varying':
+                        tau = h*lps[n]
+                        exptau = np.exp(-tau)
+                        profile = profile * (1-exptau)
+                        if n < self.nmax:
+                            ivecs[n+1] *= exptau
+                            if self.compute_P:
+                                qvecs[n+1] *= exptau
+                                uvecs[n+1] *= exptau
+                            if self.compute_V:
+                                vvecs[n+1] *= exptau
+                    elif self.optical_depth == 'thick':
+                        #this is the optically thick case, where h is a constant
+                        pass
+                    else:
+                        print("Unrecognized optical depth prescription! Defaulting to optically thick.")
+                        
+                    if self.polflux:
+                        ivecs[n]*=profile
+                    else:
+                        ivecs[n] = profile
+                        qvecs[n] = zvecs[n]
+                        uvecs[n] = zvecs[n]
+                        vvecs[n] = zvecs[n]
+                    if self.compute_P:
+                        qvecs[n]*=profile
+                        uvecs[n]*=profile
+                    if self.compute_V:
+                        vvecs[n]*=profile
+                if self.optical_depth == 'thin':
+                    ivecs = rescale_veclist(ivecs,order=self.interp_order,anti_aliasing=False)
+                    qvecs = rescale_veclist(qvecs,order=self.interp_order,anti_aliasing=False)
+                    uvecs = rescale_veclist(uvecs,order=self.interp_order,anti_aliasing=False)
+                    vvecs = rescale_veclist(vvecs,order=self.interp_order,anti_aliasing=False)
+                tf = np.sum(ivecs)
+                ivecs = [ivec*zbl/tf for ivec in ivecs]
+                if self.compute_P:
+                    qvecs = [qvec*zbl/tf*polfrac for qvec in qvecs]
+                    uvecs = [uvec*zbl/tf*polfrac for uvec in uvecs]
+                    if not np.isclose(0.,dEVPA):
+                        pvecs = [(qvecs[i]+1j*uvecs[i])*np.exp(2j*dEVPA) for i in range(len(qvecs))]
+                        qvecs = [np.real(pvec) for pvec in pvecs]
+                        uvecs = [np.imag(pvec) for pvec in pvecs]
+                if self.compute_V:
+                    vvecs = [vvec*zbl/tf*polfrac for vvec in vvecs]
+                out.append([ivecs, qvecs, uvecs, vvecs])
+            return out
 
 
 
@@ -329,7 +403,9 @@ class KerrBam:
         Given an observation and a list of data product names, 
         return a likelihood function that accounts for each contribution. 
         """
-
+        if not self.stationary:
+            print("Can't use NxCorr in time-dependent mode!")
+            return
         def nxcorr(params):
             to_eval = self.build_eval(params)
 
@@ -364,6 +440,10 @@ class KerrBam:
         Given an observation and a list of data product names, 
         return a likelihood function that accounts for each contribution. 
         """
+
+        if not self.stationary:
+            print("Can't use NRMSE in time-dependent mode!")
+            return
 
         def nrmse(params):
             to_eval = self.build_eval(params)
@@ -636,7 +716,7 @@ class KerrBam:
 
 
     def KerrBam_from_eval(self, to_eval):
-        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], alpha_zeta=to_eval['alpha_zeta'], h = to_eval['h'], polfrac = to_eval['polfrac'], dEVPA = to_eval['dEVPA'], f=to_eval['f'], e=to_eval['e'],var_a = to_eval['var_a'], var_b = to_eval['var_b'], var_c = to_eval['var_c'], var_u0=to_eval['var_u0'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac, interp_order=self.interp_order,)
+        new = KerrBam(self.fov, self.npix, self.jfunc, self.jarg_names, to_eval['jargs'], to_eval['MoDuas'], to_eval['a'], to_eval['inc'], to_eval['zbl'], PA=to_eval['PA'],  nmax=self.nmax, beta=to_eval['beta'], chi=to_eval['chi'], eta = to_eval['eta'], iota=to_eval['iota'], spec=to_eval['spec'], alpha_zeta=to_eval['alpha_zeta'], h = to_eval['h'], polfrac = to_eval['polfrac'], dEVPA = to_eval['dEVPA'], f=to_eval['f'], e=to_eval['e'],var_a = to_eval['var_a'], var_b = to_eval['var_b'], var_c = to_eval['var_c'], var_u0=to_eval['var_u0'],  polflux=self.polflux,source=self.source,adap_fac=self.adap_fac, interp_order=self.interp_order,axisymmetric=self.axisymmetric,stationary=self.stationary)
         return new
 
     def annealing_MAP(self, obs, data_types=['vis'], x0 = None, ttype='nfft', args=(), maxiter=1000,local_search_options={},initial_temp=5230.0, debias=True, seed = 4):
@@ -855,7 +935,7 @@ class KerrBam:
         sample = samples[random.randint(0,len(samples)-1)]
         return self.Bam_from_sample(sample)
 
-    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = '', modelim=False):
+    def make_image(self, ra=M87_ra, dec=M87_dec, rf= 230e9, mjd = 57854, n='all', source = '', modelim=False, frame = 0):
         if source == '':
             source = self.source
 
@@ -865,7 +945,11 @@ class KerrBam:
         try:
             self.ivecs
         except:
-            self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
+            if not self.stationary:
+                print("Using frame "+str(frame))
+                self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)[0]
+            else:
+                self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
 
         if n =='all':
             ivec = np.sum(self.ivecs,axis=0)

@@ -36,8 +36,9 @@ class KerrBam:
     if Bam is in modeling mode, jfunc should use pm functions
     '''
     #class contains knowledge of a grid in Boyer-Lindquist coordinates, priors on each pixel, and the machinery to fit them
-    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, stationary = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False, rice_amps=False, times=np.array([0])):
+    def __init__(self, fov, npix, jfunc, jarg_names, jargs, MoDuas, a, inc, zbl, PA=0.,  nmax=0, beta=0., chi=0., eta = None, iota=np.pi/2, spec=1., alpha_zeta = None, h = 1, polfrac=0.7, dEVPA=0, f=0., e=0., var_a = 0, var_b = 0, var_c = 0, var_u0=4e9, polflux=True, source='', periodic=False, adap_fac =1, axisymmetric = True, stationary = True, optical_depth='thin',compute_P=True,compute_V=False,interp_order=1, use_jax=False, rice_amps=False, times=np.array([0]), r_o=np.infty):
         if use_jax:
+            print("Using jax is not recommended for an adaptive model.")
             self.rtfunc = bam.inference.jax_kerrexact.kerr_exact_sep_lp
         else:
             self.rtfunc = bam.inference.kerrexact.kerr_exact_sep_lp   
@@ -85,6 +86,7 @@ class KerrBam:
         self.var_u0 = var_u0
         self.nmax = nmax
         self.zbl = zbl
+        self.r_o = r_o
         if self.nmax == 0 and adap_fac != 1:
             print ("You are trying to use adaptive ray tracing for non-existant sub-images. adap_fac is being forced to 1.")
             self.adap_fac = 1
@@ -129,7 +131,10 @@ class KerrBam:
                 self.stationary=True
             if self.axisymmetric:
                 print("Non-stationary flow requires non-axisymmetry for now.")
-                self.axisymmetric = True
+                self.axisymmetric = False
+            if r_o == np.infty:
+                print("Cannot use infinite camera distance with non-stationary model! Defaulting to 1e4 M.")
+                self.r_o = 1.e4
         if self.periodic:
             print("Periodic priors are not currently functional. Reverting to non-periodic.")
             self.periodic = False
@@ -184,7 +189,7 @@ class KerrBam:
         # rhovec = self.rho_uas/MoDuas
         print("Warning: primitives have changed recently.")
         print("Returning: rvecs, phivecs, tvecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps.")
-        return self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, stationary=self.stationary, compute_V = self.compute_V)        
+        return self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, stationary=self.stationary, compute_V = self.compute_V, r_o = self.r_o)        
 
 
 
@@ -198,7 +203,7 @@ class KerrBam:
 
         
         #convert rho_uas to gravitational units
-        rvecs, phivecs, tvecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, stationary=self.stationary, compute_V = self.compute_V)
+        rvecs, phivecs, tvecs, ivecs, qvecs, uvecs, vvecs, redshifts, lps = self.rtfunc(self.rho_uas, MoDuas, self.varphivec, inc, a, self.nmax, beta, chi, eta, iota, spec, alpha_zeta, adap_fac = self.adap_fac, axisymmetric=self.axisymmetric, stationary=self.stationary, compute_V = self.compute_V, r_o=self.r_o)
         if not(self.compute_P) or not(self.compute_V):
             zvecs = [np.zeros_like(rvecs[n]) for n in range(self.nmax+1)]
         if self.optical_depth == 'varying' or self.optical_depth == 'thick':
@@ -277,7 +282,7 @@ class KerrBam:
             out = []
             for time in self.times:
                 for n in reversed(range(self.nmax+1)):
-                    jfunc_vals = self.jfunc(rvecs[n],phivecs[n],tvecs[n],jargs)
+                    jfunc_vals = self.jfunc(rvecs[n],phivecs[n],tvecs[n]+time,jargs)
                     profile = jfunc_vals*redshifts[n]**(3+spec)
 
                     if self.optical_depth == 'thin':

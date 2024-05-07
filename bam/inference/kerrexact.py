@@ -23,7 +23,7 @@ minkmetric = np.diag([-1, 1, 1, 1])
 kernel = np.ones((3,3))
 
 phi_o = 3*np.pi/2
-r_o = np.infty
+# r_o = np.infty
 
 def R1_R2(al,phi,j,ret_r2=True): #B62 and B65
     """
@@ -120,7 +120,7 @@ def getlorentzboost(boost, chi):
 #these should return r, phi, tau, tau_tot
 
 
-def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, stationary=True,nmin=0):
+def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax, case, adap_fac= 1,axisymmetric = True, stationary=True,nmin=0, r_o = np.infty):
     """
     Case 1: r1, r2, r3, r4 are real, r2<rp<r3.
     Case 2: r1, r2, r3, r4 are real and less than rp.
@@ -163,7 +163,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         # Gt_o = 
         Eobs = ellipeinc(Fobs_arg, urat)
         Gt_o = 2*up/np.sqrt(-um*a**2)* (Eobs - Fobs)/(2*urat) # GL 19a, 31
-
+        # print('Gt_o',Gt_o)
 
     # sb = np.sign(beta)
     if case == 1:
@@ -196,6 +196,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         for n in range(nmin, nmax+1):
             m+= 1
             # print('m',m)
+            #Is the sb on Fobs correct?
             Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             if case == 1:
                 signpr = np.sign(Ir_turn-Ir)
@@ -203,6 +204,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 signpr = np.ones_like(Ir)
             Irmask = Ir<Ir_total
 
+            #Note discrepancy with kgeo: no sb on I2ro
             X2 = 1/2*r3142sqrt *(-Ir + I2ro)
             snnum, cnnum, dnnum, amnum = ellipj(X2,k)
 
@@ -226,16 +228,18 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 dsn2dtau = 2*snnum*cnnum*dnnum*dX2dtau
                 drsdtau = -r31*r43*r41*dsn2dtau / ((r31-r41*snsqr)**2)
                 Rpot_o = (r_o-r1)*(r_o-r2)*(r_o-r3)*(r_o-r4)
+                #Note discrepancy with kgeo: missing sb on drsdtau_o
                 drsdtau_o = np.sqrt(Rpot_o)
+
+
                 H = drsdtau / (r - r3) - drsdtau_o/(r_o-r3)
+                #Note discrepancy with kgeo: missing sb on ellipeinc
                 E = np.sqrt(r31*r42)*(ellipkinc(amnum,k) - ellipeinc(auxarg, k))
                 Pi_1 = (2./np.sqrt(r31*r42))*(ellip_pi_arr(r41/r31,amnum,k)-ellip_pi_arr(r41/r31,auxarg,k))
                 Pi_p = (2./np.sqrt(r31*r42))*(r43/(rp3*rp4))*(ellip_pi_arr((rp3*r41)/(rp4*r31),amnum,k)-
                                                                  ellip_pi_arr((rp3*r41)/(rp4*r31),auxarg,k))
                 Pi_m = (2./np.sqrt(r31*r42))*(r43/(rm3*rm4))*(ellip_pi_arr((rm3*r41)/(rm4*r31),amnum,k)-
                                                                  ellip_pi_arr((rm3*r41)/(rm4*r31),auxarg,k))
-
-
                 # final integrals
                 I1 = r3*(-Ir) + r43*Pi_1 # B48
                 I2 = H - 0.5*(r1*r4 + r2*r3)*(-tau) - E # B49
@@ -269,22 +273,26 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
 
                 phi = phi_o + I_phi + lam * Gph
                 phi[~Irmask] = np.nan
+                # phi[jmask]=10
                 phivecs.append(np.nan_to_num(phi))
             if not stationary:
                 # get I_phi, I_t, I_sigma
                 #I_0 = -tausteps
                 I0 = -tau
-                #I_phi = (2*a/(rplus-rminus))*((rplus - 0.5*a*lam)*I_p - (rminus - 0.5*a*lam)*I_m) # B1
                 I_tA = (4/(rp-rm))*((rp**2 - 0.5*a*lam*rp)*Ip - (rm**2 - 0.5*a*lam*rm)*Im) # B2
                 It = I_tA + 4*I0 + 2*I1 + I2
                 # I_sig = I_2
+                # It = I_tA + 4*I0 
 
                 #finish Gt calculation
                 Gt = -(2*up/np.sqrt(-um*a**2)* (ellipeinc(Phi_tau,urat) - ellipkinc(Phi_tau,urat))/(2*urat)) - sb * Gt_o
-
-
+                
                 t = It+a**2*Gt
-                tvecs.append(np.nan_to_num(t,nan=-1))
+                t[~Irmask]=np.nan
+                tvecs.append(np.nan_to_num(t,nan=0))
+                # plt.plot(r,t,'.')
+                # plt.title('case 2')
+                # plt.show()
                 #return (r_s, I_phi, I_t, I_sig)
     if case == 3:
         Agl = np.real(np.sqrt(r32*r42))
@@ -316,21 +324,23 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
         Ir_o = pref*ellipkinc(auxarg, k3)
         Ir_p = pref*ellipkinc(np.arccos(x3rp),k3)
         Ir_total = Ir_o - Ir_p
-        # al0 = (Agl+Bgl)/(Bgl-Agl)
-        # I3r_angle = np.arccos(1/al0)
-        # I3r = ellipkinc(I3r_angle, k3) / np.sqrt(Agl*Bgl)
-        # I3rp_angle = np.arccos((Agl*(rp-r1)-Bgl*(rp-r2))/(Agl*(rp-r1)+Bgl*(rp-r2)))
-        # I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
-        
 
+        #comment zone
+        al0 = (Agl+Bgl)/(Bgl-Agl)
+        I3r_angle = np.arccos(1/al0)
+        I3r = ellipkinc(I3r_angle, k3) / np.sqrt(Agl*Bgl)
+        I3rp_angle = np.arccos((Agl*(rp-r1)-Bgl*(rp-r2))/(Agl*(rp-r1)+Bgl*(rp-r2)))
+        I3rp = ellipkinc(I3rp_angle, k3) / np.sqrt(Agl*Bgl)    
         # Ir_total = I3r - I3rp
+
         signpr = np.ones_like(Agl)
         for n in range(nmin, nmax+1):
             m += 1
             Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             Irmask = Ir<Ir_total
 
-            X3 = np.sqrt(Agl*Bgl)*(-Ir + Ir_o)
+            #note discrepancy with kgeo: no sb on Ir_o
+            X3 = np.sqrt(Agl*Bgl)*(-Ir +Ir_o)
 
             snnum, cnnum, dnnum, amnum = ellipj(X3, k3)
             signptheta = (-1)**m * sb
@@ -353,23 +363,17 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 amX3 = amnum
                 # auxarg
 
-                # # building blocks of the path integrals
                 R1_a_0, R2_a_0 = R1_R2(al0,amX3,k3)
                 R1_b_0, R2_b_0 = R1_R2(al0,auxarg,k3)
                 R1_a_p, _ = R1_R2(alp,amX3,k3,ret_r2=False)
                 R1_b_p, _ = R1_R2(alp,auxarg,k3,ret_r2=False)
-                # if a>MINSPIN:
                 R1_a_m, _ = R1_R2(alm,amX3,k3,ret_r2=False)
                 R1_b_m, _ = R1_R2(alm,auxarg,k3,ret_r2=False)
-                # else:
-                #     R1_a_m = np.zeros(R1_a_p.shape)
-                #     R1_b_m = np.zeros(R1_a_p.shape)
 
                 Pi_1 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2)) * (R1_a_0 - R1_b_0) # B81
                 Pi_2 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2))**2 * (R2_a_0 - R2_b_0) # B81
                 Pi_p = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rp2 - Agl*rp1))*(R1_a_p - R1_b_p) # B82
                 Pi_m = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rm2 - Agl*rm1))*(R1_a_m - R1_b_m) # B82
-
 
                 # final integrals
                 pref = ((Bgl*r2 + Agl*r1)/(Bgl+Agl))
@@ -411,19 +415,24 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 I_tA = (4/(rp-rm))*((rp**2 - 0.5*a*lam*rp)*Ip - (rm**2 - 0.5*a*lam*rm)*Im) # B2
                 It = I_tA + 4*I0 + 2*I1 + I2
                 # I_sig = I_2
-
                 #finish Gt calculation
                 Gt = -(2*up/np.sqrt(-um*a**2)* (ellipeinc(Phi_tau,urat) - ellipkinc(Phi_tau,urat))/(2*urat)) - sb * Gt_o
 
-
                 t = It+a**2*Gt
-                tvecs.append(np.nan_to_num(t,nan=-1))
+                t[~Irmask]=np.nan
+
+                # plt.plot(r,t,'.')
+                # plt.title('case 3')
+                # plt.show()
+                tvecs.append(np.nan_to_num(t,nan=0))
 
     if case ==4:
         pass
     return rvecs, phivecs, tvecs, Irmasks, signprs
 
-def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, stationary=True, nmin=0, prev_Irmask = None):
+def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmetric=True, stationary=True, nmin=0, prev_Irmask = None, r_o=np.infty):
+    if r_o < np.infty:
+        r_o = np.float64(r_o)
     if np.isclose(a,0):
         a = 1e-6
     ns = range(nmin, nmax+1)
@@ -466,6 +475,7 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
     c12 = np.isclose(ir1,-ir2)
     c34 = np.isclose(ir3,-ir4)
 
+
     allreal = ir1_0 * ir2_0 * ir3_0 * ir4_0
 
     case1 = allreal * (rr2<rp)*(rr3>rp)
@@ -477,7 +487,12 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
     sb = np.sign(beta)
 
 
-    # plt.imshow((up/um).reshape((xdim,xdim)))
+    xdim = int(np.sqrt(npix))
+    # test = rr3.copy()
+    # test[case1]=0
+    # test[case2]=0
+    # # test[case3]=0
+    # plt.imshow(test.reshape((xdim,xdim)))
     # plt.colorbar()
     # plt.show()
 
@@ -488,11 +503,21 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
         m+=1
         all_signpthetas[ni] = (-1)**m*sb
 
+
+    # test = all_signpthetas[0].copy()
+    # # test[case1]=0
+    # # test[case2]=0
+    # # test[case3]=0
+    # plt.imshow(test.reshape((xdim,xdim)))
+    # plt.colorbar()
+    # plt.show()
+
+
     #for now, don't raytrace case 4
 
-    rvecs1, phivecs1, tvecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin)
-    rvecs2, phivecs2, tvecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin)
-    rvecs3, phivecs3, tvecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin)
+    rvecs1, phivecs1, tvecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin,r_o=r_o)
+    rvecs2, phivecs2, tvecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin,r_o=r_o)
+    rvecs3, phivecs3, tvecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin,r_o=r_o)
     # rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,rm,rp,sb[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
 
 
@@ -572,7 +597,7 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
             # subvarphi = varphi_grid_from_npix(adap_fac*xdim)[Irmask]
             # subvarphi = rescale(varphi.reshape((xdim,xdim)),adap_fac,order=1).flatten()[Irmask]
             prev_Irmask = Irmask
-            sub_rvecs, sub_phivecs, sub_tvecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, sub_masks = ray_trace_all(submudists, MoDuas, subvarphi, inc, a, min(nmax,n+1), axisymmetric=axisymmetric, stationary=stationary, nmin=n, adap_fac=1, prev_Irmask=prev_Irmask)
+            sub_rvecs, sub_phivecs, sub_tvecs, sub_signprs, sub_signpthetas, sub_alphas, sub_betas, sub_lams, sub_etas, sub_masks = ray_trace_all(submudists, MoDuas, subvarphi, inc, a, min(nmax,n+1), axisymmetric=axisymmetric, stationary=stationary, nmin=n, adap_fac=1, prev_Irmask=prev_Irmask,r_o=r_o)
             all_rvecs[ni]=sub_rvecs[0].flatten()
             all_phivecs[ni]=sub_phivecs[0].flatten()
             all_tvecs[ni]=sub_tvecs[0].flatten()
@@ -752,11 +777,11 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
 
 
 
-def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, alpha_zeta, adap_fac = 1, compute_V=False, axisymmetric=True, stationary=True):
+def kerr_exact_sep_lp(mudists, MoDuas, varphi, inc, a, nmax, boost, chi, fluid_eta, iota, spec, alpha_zeta, adap_fac = 1, compute_V=False, axisymmetric=True, stationary=True, r_o=np.infty):
     """
     Numerical: get rs from rho, varphi, inc, a, and subimage index n.
     """
-    rvecs, phivecs, tvecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, stationary=stationary, nmin=0)
+    rvecs, phivecs, tvecs, signprs, signpthetas, alphas, betas, lams, etas, adap_masks = ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = adap_fac, axisymmetric=axisymmetric, stationary=stationary, nmin=0, r_o=r_o)
     ivecs, qvecs, uvecs, vvecs, redshifts, lps = emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas, lams, etas, a, inc, boost, chi, fluid_eta, iota, spec, alpha_zeta, compute_V=compute_V)
     if adap_fac > 1 and nmax > 0:
         for n in range(1,nmax+1):

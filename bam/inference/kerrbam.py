@@ -947,14 +947,14 @@ class KerrBam:
         if self.mode == 'model':
             print("Cannot directly make images in model mode!")
             return
-        try:
-            self.ivecs
-        except:
-            if not self.stationary:
-                print("Using frame "+str(frame))
-                self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)[0]
-            else:
-                self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
+        # try:
+        #     self.ivecs
+        # except:
+        if not self.stationary:
+            print("Using frame "+str(frame))
+            self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)[frame]
+        else:
+            self.ivecs, self.qvecs, self.uvecs, self.vvecs = self.compute_image(self.imparams)
 
         if n =='all':
             ivec = np.sum(self.ivecs,axis=0)

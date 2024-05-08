@@ -200,6 +200,8 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             if case == 1:
                 signpr = np.sign(Ir_turn-Ir)
+                signpr = np.ones_like(Ir)    
+
             else:
                 signpr = np.ones_like(Ir)
             Irmask = Ir<Ir_total
@@ -215,7 +217,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             rvecs.append(rvec)
             signprs.append(signpr)
             Irmasks.append(Irmask)
-            if not axisymmetric:      
+            if not axisymmetric:  
                 tau = Ir
                 auxarg = np.arcsin(x2ro)
 
@@ -224,6 +226,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 rp4 = rp - r4
                 rm4 = rm - r4
 
+                # signpr = np.ones_like(signpr)
                 dX2dtau = -0.5*r3142sqrt
                 dsn2dtau = 2*snnum*cnnum*dnnum*dX2dtau
                 drsdtau = -r31*r43*r41*dsn2dtau / ((r31-r41*snsqr)**2)
@@ -232,10 +235,10 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 drsdtau_o = signpr*np.sqrt(Rpot_o)
 
 
-                H = signpr*drsdtau / (r - r3) - drsdtau_o/(r_o-r3)
+                H = drsdtau / (r - r3) - drsdtau_o/(r_o-r3)
                 #Note discrepancy with kgeo: missing sb on ellipeinc
                 E = np.sqrt(r31*r42)*(ellipkinc(amnum,k) - signpr*ellipeinc(auxarg, k))
-                Pi_1 = (2./np.sqrt(r31*r42))*(ellip_pi_arr(r41/r31,amnum,k)-ellip_pi_arr(r41/r31,auxarg,k))
+                Pi_1 = (2./np.sqrt(r31*r42))*(ellip_pi_arr(r41/r31,amnum,k)-signpr*ellip_pi_arr(r41/r31,auxarg,k))
                 Pi_p = (2./np.sqrt(r31*r42))*(r43/(rp3*rp4))*(ellip_pi_arr((rp3*r41)/(rp4*r31),amnum,k)-
                                                                  signpr*ellip_pi_arr((rp3*r41)/(rp4*r31),auxarg,k))
                 Pi_m = (2./np.sqrt(r31*r42))*(r43/(rm3*rm4))*(ellip_pi_arr((rm3*r41)/(rm4*r31),amnum,k)-
@@ -502,11 +505,12 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
 
 
     # xdim = int(np.sqrt(npix))
-    # test = sb.copy()
+    # test = np.zeros_like(sb)
     # test[case1]=1
     # test[case2]=2
     # test[case3]=3
     # plt.imshow(test.reshape((xdim,xdim)))
+    # plt.title("Cases")
     # plt.colorbar()
     # plt.show()
 
@@ -519,22 +523,13 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
         m+=1
         all_signpthetas[ni] = (-1)**m*sb
 
-
-    # test = all_signpthetas[0].copy()
-    # # test[case1]=0
-    # # test[case2]=0
-    # # test[case3]=0
-    # plt.imshow(test.reshape((xdim,xdim)))
-    # plt.colorbar()
-    # plt.show()
-
-
     #for now, don't raytrace case 4
 
     rvecs1, phivecs1, tvecs1, Irmasks1, signprs1 = ray_trace_by_case(a,rm,rp,sb[case1],lam[case1],eta[case1],rr1[case1],rr2[case1],rr3[case1],rr4[case1],up[case1],um[case1],inc,nmax,1,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin,r_o=r_o)
     rvecs2, phivecs2, tvecs2, Irmasks2, signprs2 = ray_trace_by_case(a,rm,rp,sb[case2],lam[case2],eta[case2],rr1[case2],rr2[case2],rr3[case2],rr4[case2],up[case2],um[case2],inc,nmax,2,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin,r_o=r_o)
     rvecs3, phivecs3, tvecs3, Irmasks3, signprs3 = ray_trace_by_case(a,rm,rp,sb[case3],lam[case3],eta[case3],rr1[case3],rr2[case3],r3[case3],r4[case3],up[case3],um[case3],inc,nmax,3,adap_fac=adap_fac,axisymmetric=axisymmetric,stationary=stationary,nmin=nmin,r_o=r_o)
     # rvecs4, phivecs4, Irmasks4, signprs4 = ray_trace_by_case(a,rm,rp,sb[case4],lam[case4],eta[case4],r1[case4],r2[case4],r3[case4],r4[case4],up[case4],um[case4],inc,nmax,4,adap_fac=adap_fac,axisymmetric=axisymmetric,nmin=nmin)
+
 
 
     #stitch together cases
@@ -576,6 +571,15 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
         signpr_all[case3]=signprs3[ni]
         # signpr_all[case4]=signprs4[ni]
         all_signprs.append(signpr_all)
+    
+    # test = all_signprs[0]
+    # test[case1]=0
+    # test[case2]=0
+    # test[case3]=0
+    # plt.imshow(test.reshape((xdim,xdim)))
+    # plt.colorbar()
+    # plt.title('Sign(pr)')
+    # plt.show()
 
     alphas = [alpha for n in ns]
     betas = [beta for n in ns]

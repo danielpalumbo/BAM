@@ -205,7 +205,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             Irmask = Ir<Ir_total
 
             #Note discrepancy with kgeo: no sb on I2ro
-            X2 = 1/2*r3142sqrt *(-Ir + I2ro)
+            X2 = 1/2*r3142sqrt *(-Ir + signpr*I2ro)
             snnum, cnnum, dnnum, amnum = ellipj(X2,k)
 
             snsqr = snnum**2
@@ -229,19 +229,19 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 drsdtau = -r31*r43*r41*dsn2dtau / ((r31-r41*snsqr)**2)
                 Rpot_o = (r_o-r1)*(r_o-r2)*(r_o-r3)*(r_o-r4)
                 #Note discrepancy with kgeo: missing sb on drsdtau_o
-                drsdtau_o = np.sqrt(Rpot_o)
+                drsdtau_o = signpr*np.sqrt(Rpot_o)
 
 
-                H = drsdtau / (r - r3) - drsdtau_o/(r_o-r3)
+                H = signpr*drsdtau / (r - r3) - drsdtau_o/(r_o-r3)
                 #Note discrepancy with kgeo: missing sb on ellipeinc
-                E = np.sqrt(r31*r42)*(ellipkinc(amnum,k) - ellipeinc(auxarg, k))
+                E = np.sqrt(r31*r42)*(ellipkinc(amnum,k) - signpr*ellipeinc(auxarg, k))
                 Pi_1 = (2./np.sqrt(r31*r42))*(ellip_pi_arr(r41/r31,amnum,k)-ellip_pi_arr(r41/r31,auxarg,k))
                 Pi_p = (2./np.sqrt(r31*r42))*(r43/(rp3*rp4))*(ellip_pi_arr((rp3*r41)/(rp4*r31),amnum,k)-
-                                                                 ellip_pi_arr((rp3*r41)/(rp4*r31),auxarg,k))
+                                                                 signpr*ellip_pi_arr((rp3*r41)/(rp4*r31),auxarg,k))
                 Pi_m = (2./np.sqrt(r31*r42))*(r43/(rm3*rm4))*(ellip_pi_arr((rm3*r41)/(rm4*r31),amnum,k)-
-                                                                 ellip_pi_arr((rm3*r41)/(rm4*r31),auxarg,k))
+                                                                 signpr*ellip_pi_arr((rm3*r41)/(rm4*r31),auxarg,k))
                 # final integrals
-                I1 = r3*(-Ir) + r43*Pi_1 # B48
+                I1 = r3*(-tau) + r43*Pi_1 # B48
                 I2 = H - 0.5*(r1*r4 + r2*r3)*(-tau) - E # B49
                 Ip = Ir/rp3 - Pi_p # B50
                 Im = Ir/rm3 - Pi_m # B50
@@ -282,13 +282,15 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 I_tA = (4/(rp-rm))*((rp**2 - 0.5*a*lam*rp)*Ip - (rm**2 - 0.5*a*lam*rm)*Im) # B2
                 It = I_tA + 4*I0 + 2*I1 + I2
                 # I_sig = I_2
-                # It = I_tA + 4*I0 
 
                 #finish Gt calculation
                 Gt = -(2*up/np.sqrt(-um*a**2)* (ellipeinc(Phi_tau,urat) - ellipkinc(Phi_tau,urat))/(2*urat)) - sb * Gt_o
                 
-                t = It+a**2*Gt
+                t = It+a**2*Gt 
+                t = t+(r_o + 2*np.log(r_o))
+                # t = I2
                 t[~Irmask]=np.nan
+                # t = -1000*np.ones_like()
                 tvecs.append(np.nan_to_num(t,nan=0))
                 # plt.plot(r,t,'.')
                 # plt.title('case 2')
@@ -340,7 +342,7 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             Irmask = Ir<Ir_total
 
             #note discrepancy with kgeo: no sb on Ir_o
-            X3 = np.sqrt(Agl*Bgl)*(-Ir +Ir_o)
+            X3 = np.sqrt(Agl*Bgl)*(-Ir +signpr*Ir_o)
 
             snnum, cnnum, dnnum, amnum = ellipj(X3, k3)
             signptheta = (-1)**m * sb
@@ -370,10 +372,10 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 R1_a_m, _ = R1_R2(alm,amX3,k3,ret_r2=False)
                 R1_b_m, _ = R1_R2(alm,auxarg,k3,ret_r2=False)
 
-                Pi_1 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2)) * (R1_a_0 - R1_b_0) # B81
-                Pi_2 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2))**2 * (R2_a_0 - R2_b_0) # B81
-                Pi_p = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rp2 - Agl*rp1))*(R1_a_p - R1_b_p) # B82
-                Pi_m = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rm2 - Agl*rm1))*(R1_a_m - R1_b_m) # B82
+                Pi_1 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2)) * (R1_a_0 - signpr *R1_b_0) # B81
+                Pi_2 = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl**2-Agl**2))**2 * (R2_a_0 - signpr*R2_b_0) # B81
+                Pi_p = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rp2 - Agl*rp1))*(R1_a_p - signpr* R1_b_p) # B82
+                Pi_m = ((2*r21*np.sqrt(Agl*Bgl))/(Bgl*rm2 - Agl*rm1))*(R1_a_m - signpr*R1_b_m) # B82
 
                 # final integrals
                 pref = ((Bgl*r2 + Agl*r1)/(Bgl+Agl))
@@ -419,6 +421,8 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
                 Gt = -(2*up/np.sqrt(-um*a**2)* (ellipeinc(Phi_tau,urat) - ellipkinc(Phi_tau,urat))/(2*urat)) - sb * Gt_o
 
                 t = It+a**2*Gt
+                t = t+(r_o + 2*np.log(r_o))
+                # t = I2
                 t[~Irmask]=np.nan
 
                 # plt.plot(r,t,'.')
@@ -487,14 +491,26 @@ def ray_trace_all(mudists, MoDuas, varphi, inc, a, nmax, adap_fac = 1, axisymmet
     sb = np.sign(beta)
 
 
-    xdim = int(np.sqrt(npix))
+    # xdim = int(np.sqrt(npix))
     # test = rr3.copy()
-    # test[case1]=0
-    # test[case2]=0
-    # # test[case3]=0
+    # test[case1]=1
+    # test[case2]=2
+    # test[case3]=3
     # plt.imshow(test.reshape((xdim,xdim)))
     # plt.colorbar()
     # plt.show()
+
+
+    # xdim = int(np.sqrt(npix))
+    # test = sb.copy()
+    # test[case1]=1
+    # test[case2]=2
+    # test[case3]=3
+    # plt.imshow(test.reshape((xdim,xdim)))
+    # plt.colorbar()
+    # plt.show()
+
+
 
     m = sb.copy()
     m[m>0] = 0

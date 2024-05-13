@@ -748,7 +748,7 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         fupperfluid = np.swapaxes(fupperfluid, 1,2)
 
         if compute_V:
-            vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]/pspatialnorm
+            vvec = np.dot(np.swapaxes(pspatialfluid,1,2), bvec).T[0]#/pspatialnorm
         else:
             vvec = zeros
         #apply the tetrad to get kerr f

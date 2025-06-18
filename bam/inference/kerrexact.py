@@ -770,7 +770,7 @@ def emissivity_model_sep_lp(rvecs, phivecs, signprs, signpthetas, alphas, betas,
         #screen appearance
         nu = -(alpha + spin * np.sin(inc))
 
-        norm = (nu**2 + beta**2) * np.sqrt(kappa1**2+kappa2**2)/sinzeta**((alpha_zeta+1)/2)
+        norm = np.sqrt((nu**2 + beta**2) * (kappa1**2+kappa2**2))/sinzeta**((alpha_zeta+1)/2)
         ealpha = (beta * kappa2 - nu * kappa1) / norm  
         ebeta = (beta * kappa1 + nu * kappa2) / norm 
 

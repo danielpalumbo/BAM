@@ -200,14 +200,15 @@ def ray_trace_by_case(a, rm, rp, sb, lam, eta, r1, r2, r3, r4, up, um, inc, nmax
             Ir = 1/np.sqrt(-um*a**2)*(2*m*Kurat - sb*Fobs)
             if case == 1:
                 signpr = np.sign(Ir_turn-Ir)
-                signpr = np.ones_like(Ir)    
+                # signpr = np.ones_like(Ir)    
 
             else:
                 signpr = np.ones_like(Ir)
             Irmask = Ir<Ir_total
 
             #Note discrepancy with kgeo: no sb on I2ro
-            X2 = 1/2*r3142sqrt *(-Ir + signpr*I2ro)
+            # X2 = 1/2*r3142sqrt *(-Ir + signpr*I2ro)
+            X2 = 1/2*r3142sqrt *(-Ir + I2ro)
             snnum, cnnum, dnnum, amnum = ellipj(X2,k)
 
             snsqr = snnum**2
